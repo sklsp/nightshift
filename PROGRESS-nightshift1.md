@@ -5,7 +5,7 @@
 - [x] N5. textlint: refuse dashes and trailing spaces (47 passed in 0.24s)
 - [x] N6. cli: init and build (50 passed in 0.27s)
 - [x] N7. progress: read the progress file (57 passed in 0.31s)
-- [ ] N8. gate: start and wait
+- [x] N8. gate: start and wait (61 passed in 0.75s)
 - [ ] N9. gate: summary parsing
 - [ ] N10. gate: one test file with coverage of one module
 - [ ] N11. agent: launch and status adapters
