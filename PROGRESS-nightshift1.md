@@ -3,7 +3,7 @@
 - [x] N3. items: parse items.md (34 passed in 0.34s)
 - [x] N4. render: start file, item files, checklist (41 passed in 0.18s)
 - [x] N5. textlint: refuse dashes and trailing spaces (47 passed in 0.24s)
-- [ ] N6. cli: init and build
+- [x] N6. cli: init and build (50 passed in 0.27s)
 - [ ] N7. progress: read the progress file
 - [ ] N8. gate: start and wait
 - [ ] N9. gate: summary parsing
