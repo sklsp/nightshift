@@ -1,0 +1,50 @@
+nightshift run $name: items 1 to $total, ONE item at a time, in the repo from run.toml, branch `$branch`.
+Stay on `$branch`. Never push, never create or switch branches. Work unattended for several hours, never ask questions,
+never stop early. Your FIRST action is a tool call. Do NOT finish between items. Finish only when item $total is done.
+
+WHY
+A nightshift run packages work for an unattended coding agent: the run directory holds run.toml and items.md; this
+tool renders one spec file per item plus a checklist, gives the agent a test gate that works inside a 30-second
+command limit, supervises the agent (restarts it when a session ends, stops when every item is ticked), and reports
+progress. You are building or changing code in the repo while nobody watches: keep it small, clear, typed and tested.
+
+HOW THIS RUN WORKS
+- Each item is in its own file: item-01.md up to item-$total_padded.md. Open ONLY the file of the item you are
+  working on. Never open the next item file before the current item is committed and ticked.
+- Progress lives in PROGRESS-$name.md (created by this render; it is committed with each item).
+  Start: if it does not exist, create it with the lines of checklist.txt (unticked), then open item-01.md.
+  Resume: find the first item that is not ticked [x] and not BLOCKED, open its file. If the working tree already
+  holds changes for that item, a session before you made them: review `git diff --stat` and `git status` once,
+  finish what is missing, run the check.
+- After each item: tick it as `- [x] <id>. <title> (<last pytest line>)` in the same commit, then open the next
+  item file straight away. No summaries between items.
+
+THE CHECK (cwd = repo; before EVERY commit, it must pass)
+- `$check_command`
+- The lint part prints its all-pass line and the test part ends with `N passed` and 0 failed. The whole suite must
+  stay under 20 seconds: tests use tiny timeouts (0.05 s), fake commands (`sys.executable -c ...`) and tmp_path,
+  never real sleeps above 0.2 s and never the network. Do not add flags that hide the summary line of the test part.
+
+THE GATE
+Your commands time out after 30 seconds. If a check takes longer than one command allows, run it through the gate:
+start it once with `nightshift gate start <run dir>`, then poll with `nightshift gate wait <run dir> 1` and again
+with `nightshift gate wait <run dir> 2`. Each call returns within the command limit; when the check is done, the
+gate says pass or fail. If a direct run takes longer than the limit, your tests are too slow: fix them.
+
+RULES
+- **Only these items.** Ideas go as one line in IDEAS.md in the run directory. Never re-scope an item.
+- **Tests:** every behaviour an item names gets a test that fails if the behaviour breaks. Literal expected values.
+  Never delete or weaken a test from an earlier item; if a later item changes behaviour on purpose, update the test
+  and say why in the commit body.
+- **Commits:** one commit per item, message `<id>: <title>` (for example `T1: fix the parser`), body = the last
+  pytest line. The tick goes in the same commit. Stage only the files of the item plus PROGRESS-$name.md, with
+  `git add <path>`. Never `git add -A` or `git add .`. Never `--amend`.
+- **Terminal:** code must work on Windows and Linux (pathlib, no shell=True unless an item says so, subprocess
+  with lists). Chain commands the way your shell requires.
+- **Text:** no em dashes or en dashes anywhere, in code, docs or commit messages. Plain, short English.
+- **Never** run git checkout, switch, branch, merge, rebase, stash, reset, restore, clean or push.
+- **Failures:** if an item fails 3 times, write what you tried to BLOCKED.md in the run directory, undo your
+  uncommitted edits of that item by hand, tick it as `- [ ] <id>. ... BLOCKED`, commit that, go on.
+
+**Final message:** items 1 to $total with a commit hash each (or BLOCKED), the last pytest line, and a section
+"Not done exactly as written:" (write "none" if there are none).
