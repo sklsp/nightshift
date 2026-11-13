@@ -1,13 +1,17 @@
 """Command line interface for nightshift."""
 
 import argparse
+import re
+import subprocess
 import sys
 from pathlib import Path
 
 from nightshift import __version__
 from nightshift.agent import AgentError
 from nightshift.config import ConfigError, load_config
+from nightshift.gate import parse_summary
 from nightshift.items import ItemsError, load_items
+from nightshift.progress import read_progress
 from nightshift.render import RenderError, render_run
 from nightshift.supervise import supervise
 
@@ -67,6 +71,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     supervise_parser.add_argument("run_dir", type=Path, help="path of an existing run directory")
 
+    status_parser = subparsers.add_parser("status", help="print a one-screen summary of the run")
+    status_parser.add_argument("run_dir", type=Path, help="path of an existing run directory")
+
     return parser
 
 
@@ -80,6 +87,8 @@ def main(argv: list[str] | None = None) -> int:
         return _build(args.run_dir)
     if args.command == "supervise":
         return _supervise(args.run_dir)
+    if args.command == "status":
+        return _status(args.run_dir)
     parser.print_help()
     return 2
 
@@ -125,4 +134,77 @@ def _supervise(run_dir: Path) -> int:
     except (ConfigError, ItemsError, AgentError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
+
+
+def _status(run_dir: Path) -> int:
+    """Print a one-screen summary of the run and exit 0."""
+    try:
+        config = load_config(run_dir)
+    except ConfigError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+
+    progress_path = config.repo / f"PROGRESS-{config.name}.md"
+    progress = read_progress(progress_path, config.prefix)
+    print(f"{config.name}: {len(progress.done)}/{progress.total} done")
+    if progress.blocked:
+        print("blocked: " + ", ".join(f"{config.prefix}{n}" for n in progress.blocked))
+    else:
+        print("blocked: none")
+
+    if progress.next_item is None:
+        print("next: none")
+    else:
+        title = _next_title(progress_path, config.prefix, progress.next_item)
+        suffix = f" {title}" if title else ""
+        print(f"next: {config.prefix}{progress.next_item}{suffix}")
+
+    print(_last_gate_line(run_dir))
+    _print_commits(config.repo)
+    return 0
+
+
+def _next_title(progress_path: Path, prefix: str, number: int) -> str | None:
+    """Return the title of one item line from the progress file."""
+    pattern = re.compile(rf"^- \[( |x|X)\] {re.escape(prefix)}{number}\. (.+)$")
+    for line in progress_path.read_text(encoding="utf-8").splitlines():
+        match = pattern.match(line.strip())
+        if match:
+            return match.group(2).strip()
+    return None
+
+
+def _last_gate_line(run_dir: Path) -> str:
+    """One line describing the last gated test run, if any."""
+    log_path = run_dir / ".gate" / "log"
+    done_path = run_dir / ".gate" / "done"
+    if not log_path.is_file():
+        return "last gate: none"
+    if not done_path.is_file():
+        return "last gate: running"
+    code_text = done_path.read_text(encoding="utf-8", errors="replace").strip() or "?"
+    summary = parse_summary(log_path.read_text(encoding="utf-8", errors="replace"))
+    if summary.line is None:
+        return f"last gate: exit {code_text} (no pytest summary line)"
+    return f"last gate: exit {code_text}: {summary.line}"
+
+
+def _print_commits(repo: Path) -> None:
+    """Print the last five commit subjects of repo, or a note when that is impossible."""
+    try:
+        result = subprocess.run(
+            ["git", "log", "-5", "--format=%h %s"],
+            cwd=repo,
+            capture_output=True,
+            text=True,
+            stdin=subprocess.DEVNULL,
+        )
+    except FileNotFoundError:
+        print("commits: skipped (git not on PATH)")
+        return
+    if result.returncode != 0 or not result.stdout.strip():
+        print("commits: none")
+        return
+    for line in result.stdout.rstrip("\n").splitlines():
+        print(line)
 

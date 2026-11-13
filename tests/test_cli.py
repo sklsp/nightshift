@@ -1,10 +1,75 @@
 """Tests for the nightshift command line interface."""
 
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
 
 from nightshift.cli import main
+
+
+def _make_run(tmp_path: Path, repo: Path) -> Path:
+    """Create a run dir whose config points at repo with prefix N."""
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    (run_dir / "run.toml").write_text(
+        f'[run]\nname = "st"\nrepo = "{repo.as_posix()}"\nprefix = "N"\n[check]\ntest = ["pytest"]\n',
+        encoding="utf-8",
+    )
+    return run_dir
+
+
+def _git(repo: Path, *args: str) -> None:
+    """Run one git command in repo and fail the test when it errors."""
+    result = subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True)
+    assert result.returncode == 0, f"git {' '.join(args)} failed: {result.stderr}"
+
+
+def test_status_prints_progress_gate_and_commits(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    if shutil.which("git") is None:
+        pytest.skip("git not on PATH")
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "a.txt").write_text("x", encoding="utf-8")
+    _git(repo, "init")
+    _git(repo, "add", ".")
+    _git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-m", "first commit")
+
+    run_dir = _make_run(tmp_path, repo)
+    (repo / "PROGRESS-st.md").write_text(
+        "- [x] N1. first item\n- [ ] N2. second item BLOCKED\n- [ ] N3. third item\n", encoding="utf-8"
+    )
+    gate_dir = run_dir / ".gate"
+    gate_dir.mkdir()
+    (gate_dir / "log").write_text("collected 1 item\n= 1 passed in 0.01s =\n", encoding="utf-8")
+    (gate_dir / "done").write_text("0\n", encoding="utf-8")
+
+    assert main(["status", str(run_dir)]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0] == "st: 1/3 done"
+    assert "blocked: N2" in lines
+    assert "next: N3 third item" in lines
+    assert "last gate: exit 0: 1 passed in 0.01s" in lines
+    assert any(line.endswith(" first commit") for line in lines)
+
+
+def test_status_without_progress_file(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    run_dir = _make_run(tmp_path, repo)
+
+    assert main(["status", str(run_dir)]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert lines[0] == "st: 0/0 done"
+    assert "blocked: none" in lines
+    assert "next: none" in lines
+    assert "last gate: none" in lines
+    assert lines[-1].startswith("commits:")
+
 
 
 def test_version_flag_prints_version_and_exits_zero(capsys: pytest.CaptureFixture[str]) -> None:
