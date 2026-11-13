@@ -1,6 +1,6 @@
 - [x] N1. build: package skeleton (2 passed in 0.01s)
 - [x] N2. config: run.toml loader (22 passed in 0.12s)
-- [ ] N3. items: parse items.md
+- [x] N3. items: parse items.md (34 passed in 0.34s)
 - [ ] N4. render: start file, item files, checklist
 - [ ] N5. textlint: refuse dashes and trailing spaces
 - [ ] N6. cli: init and build
