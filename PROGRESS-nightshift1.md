@@ -1,5 +1,5 @@
 - [x] N1. build: package skeleton (2 passed in 0.01s)
-- [ ] N2. config: run.toml loader
+- [x] N2. config: run.toml loader (22 passed in 0.12s)
 - [ ] N3. items: parse items.md
 - [ ] N4. render: start file, item files, checklist
 - [ ] N5. textlint: refuse dashes and trailing spaces
