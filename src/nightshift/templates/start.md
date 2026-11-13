@@ -9,10 +9,11 @@ command limit, supervises the agent (restarts it when a session ends, stops when
 progress. You are building or changing code in the repo while nobody watches: keep it small, clear, typed and tested.
 
 HOW THIS RUN WORKS
-- Each item is in its own file: item-01.md up to item-$total_padded.md. Open ONLY the file of the item you are
-  working on. Never open the next item file before the current item is committed and ticked.
-- Progress lives in PROGRESS-$name.md (created by this render; it is committed with each item).
-  Start: if it does not exist, create it with the lines of checklist.txt (unticked), then open item-01.md.
+- Each item is in its own file, one per line below. Open ONLY the file of the item you are working on.
+  Never open the next item file before the current item is committed and ticked.
+$items_list
+- Progress lives in $progress_file (created by this render; it is committed with each item).
+  Start: if it does not exist, create it with the lines of $checklist_file (unticked), then open $first_item.
   Resume: find the first item that is not ticked [x] and not BLOCKED, open its file. If the working tree already
   holds changes for that item, a session before you made them: review `git diff --stat` and `git status` once,
   finish what is missing, run the check.
@@ -37,7 +38,7 @@ RULES
   Never delete or weaken a test from an earlier item; if a later item changes behaviour on purpose, update the test
   and say why in the commit body.
 - **Commits:** one commit per item, message `<id>: <title>` (for example `T1: fix the parser`), body = the last
-  pytest line. The tick goes in the same commit. Stage only the files of the item plus PROGRESS-$name.md, with
+  pytest line. The tick goes in the same commit. Stage only the files of the item plus $progress_file, with
   `git add <path>`. Never `git add -A` or `git add .`. Never `--amend`.
 - **Terminal:** code must work on Windows and Linux (pathlib, no shell=True unless an item says so, subprocess
   with lists). Chain commands the way your shell requires.

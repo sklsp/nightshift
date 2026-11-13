@@ -15,14 +15,15 @@ class RenderError(Exception):
 
 def render_run(config: RunConfig, items: list[Item], out_dir: Path) -> list[Path]:
     """Write 00-start.md, one file per item and checklist.txt into out_dir."""
+    run_dir = out_dir.resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
     written = [out_dir / "00-start.md"]
-    written[0].write_text(_start_text(config, len(items)), encoding="utf-8", newline="\n")
+    written[0].write_text(_start_text(config, len(items), run_dir), encoding="utf-8", newline="\n")
 
     total = len(items)
     for item in items:
         path = out_dir / f"item-{item.number:02d}.md"
-        path.write_text(_item_text(config, item, total), encoding="utf-8", newline="\n")
+        path.write_text(_item_text(config, item, total, run_dir), encoding="utf-8", newline="\n")
         written.append(path)
 
     checklist = [f"- [ ] {config.prefix}{item.number}. {item.title}" for item in items]
@@ -45,25 +46,31 @@ def _render_error_message(problems: dict[Path, list[str]]) -> str:
     return "\n".join(lines)
 
 
-def _start_text(config: RunConfig, total: int) -> str:
+def _start_text(config: RunConfig, total: int, run_dir: Path) -> str:
     """Render the 00-start.md text for one run."""
     template = Template(_template("start.md"))
+    item_paths = [(run_dir / f"item-{number:02d}.md").as_posix() for number in range(1, total + 1)]
     return template.substitute(
         name=config.name,
         branch=config.branch,
         total=str(total),
-        total_padded=f"{total:02d}",
+        first_item=item_paths[0],
+        items_list="\n".join(f"  {path}" for path in item_paths),
+        checklist_file=(run_dir / "checklist.txt").as_posix(),
+        progress_file=_progress_path(config).as_posix(),
         check_command=_check_command(config),
     )
 
 
-def _item_text(config: RunConfig, item: Item, total: int) -> str:
+def _item_text(config: RunConfig, item: Item, total: int, run_dir: Path) -> str:
     """Render the spec file text for one item."""
     template = Template(_template("item.md"))
+    start_file = (run_dir / "00-start.md").as_posix()
     if item.number < total:
-        ending = f"open item-{item.number + 1:02d}.md and do that item. Do not look at it before this one is committed."
+        next_item = (run_dir / f"item-{item.number + 1:02d}.md").as_posix()
+        ending = f"open {next_item} and do that item. Do not look at it before this one is committed."
     else:
-        ending = "all items are done; send the final message described in 00-start.md."
+        ending = f"all items are done; send the final message described in {start_file}."
     return template.substitute(
         name=config.name,
         number=str(item.number),
@@ -71,8 +78,15 @@ def _item_text(config: RunConfig, item: Item, total: int) -> str:
         title=item.title,
         body=item.body,
         id=f"{config.prefix}{item.number}",
+        start_file=start_file,
+        progress_file=_progress_path(config).as_posix(),
         ending=ending,
     )
+
+
+def _progress_path(config: RunConfig) -> Path:
+    """Return the path of the run's progress file in the repo."""
+    return config.repo / f"PROGRESS-{config.name}.md"
 
 
 def _check_command(config: RunConfig) -> str:

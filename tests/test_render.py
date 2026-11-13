@@ -82,12 +82,25 @@ def test_no_lint_renders_test_command_only(tmp_path: Path) -> None:
 
 
 def test_render_twice_gives_identical_bytes(tmp_path: Path) -> None:
-    first = tmp_path / "one"
-    second = tmp_path / "two"
-    paths_a = render_run(_config(tmp_path), _items(), first)
-    paths_b = render_run(_config(tmp_path), _items(), second)
-    for path_a, path_b in zip(paths_a, paths_b, strict=True):
-        assert path_a.read_bytes() == path_b.read_bytes()
+    out = tmp_path / "out"
+    paths_a = render_run(_config(tmp_path), _items(), out)
+    bytes_a = [path.read_bytes() for path in paths_a]
+    paths_b = render_run(_config(tmp_path), _items(), out)
+    assert [path.read_bytes() for path in paths_b] == bytes_a
+
+
+def test_spec_files_use_absolute_paths(tmp_path: Path) -> None:
+    config = _config(tmp_path)
+    out = tmp_path / "out"
+    render_run(config, _items(), out)
+    run_dir = out.resolve()
+    next_item = (run_dir / "item-02.md").as_posix()
+    progress_file = (config.repo / f"PROGRESS-{config.name}.md").as_posix()
+    start_text = (out / "00-start.md").read_text(encoding="utf-8")
+    item1_text = (out / "item-01.md").read_text(encoding="utf-8")
+    assert next_item in start_text
+    assert next_item in item1_text
+    assert progress_file in start_text
 
 
 def test_render_run_refuses_item_body_with_dash(tmp_path: Path) -> None:
