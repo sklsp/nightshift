@@ -31,14 +31,7 @@ def test_two_items_with_bodies() -> None:
 
 
 def test_preamble_before_first_header_is_ignored() -> None:
-    text = (
-        "nightshift run demo, items 1 to 2.\n"
-        "Rules apply.\n"
-        "\n"
-        "## Only item\n"
-        "\n"
-        "Body line.\n"
-    )
+    text = "nightshift run demo, items 1 to 2.\nRules apply.\n\n## Only item\n\nBody line.\n"
     items = parse_items(text)
     assert len(items) == 1
     assert items[0].number == 1

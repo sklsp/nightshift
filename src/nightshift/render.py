@@ -61,10 +61,7 @@ def _item_text(config: RunConfig, item: Item, total: int) -> str:
     """Render the spec file text for one item."""
     template = Template(_template("item.md"))
     if item.number < total:
-        ending = (
-            f"open item-{item.number + 1:02d}.md and do that item. "
-            "Do not look at it before this one is committed."
-        )
+        ending = f"open item-{item.number + 1:02d}.md and do that item. Do not look at it before this one is committed."
     else:
         ending = "all items are done; send the final message described in 00-start.md."
     return template.substitute(

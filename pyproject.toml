@@ -25,3 +25,6 @@ nightshift = ["templates/*.md"]
 testpaths = ["tests"]
 pythonpath = ["src"]
 addopts = "-q"
+
+[tool.mypy]
+mypy_path = "src"

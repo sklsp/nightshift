@@ -10,6 +10,7 @@ import time
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from nightshift.config import RunConfig
 
@@ -60,7 +61,7 @@ def _preflight(config: RunConfig, run_dir: Path) -> int | None:
         print(f"GATE ALREADY RUNNING; now run: nightshift gate wait {run_dir} 1")
         return 0
 
-    for lint_command in ([config.lint] if config.lint else []):  # lint is ONE command (fixed by Claude)
+    for lint_command in [config.lint] if config.lint else []:  # lint is ONE command (fixed by Claude)
         with tempfile.TemporaryFile("w+b") as lint_log:
             result = subprocess.run(
                 lint_command,
@@ -276,7 +277,7 @@ def _child_env() -> dict[str, str]:
     return env
 
 
-def _detach_kwargs() -> dict[str, object]:
+def _detach_kwargs() -> dict[str, Any]:
     """Popen flags that detach the child from this terminal."""
     if os.name == "nt":
         flags = subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP
