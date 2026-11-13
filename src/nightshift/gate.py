@@ -54,8 +54,8 @@ def _mode_path(run_dir: Path) -> Path:
     return _gate_dir(run_dir) / _MODE_NAME
 
 
-def start(config: RunConfig, run_dir: Path, extra_args: Sequence[str] = ()) -> int:
-    """Start the test command detached behind the gate, or refuse to double start."""
+def _preflight(config: RunConfig, run_dir: Path) -> int | None:
+    """Refuse a double start and run lint first; return an exit code or None to continue."""
     if _run_is_going(run_dir):
         print(f"GATE ALREADY RUNNING; now run: nightshift gate wait {run_dir} 1")
         return 0
@@ -76,15 +76,18 @@ def start(config: RunConfig, run_dir: Path, extra_args: Sequence[str] = ()) -> i
                     print(line, file=sys.stderr)
                 print("GATE NOT STARTED: lint failed", file=sys.stderr)
                 return 1
+    return None
 
-    command = [*config.test, *extra_args]
+
+def _launch(config: RunConfig, run_dir: Path, command: list[str], mode_line: str) -> int:
+    """Launch the detached test run and remember how it was started in .gate/mode."""
     gate_dir = _gate_dir(run_dir)
     gate_dir.mkdir(parents=True, exist_ok=True)
     done_path = _done_path(run_dir)
     if done_path.exists():
         done_path.unlink()
     log_path = _log_path(run_dir)
-    _mode_path(run_dir).write_text(" ".join(command), encoding="utf-8", newline="\n")
+    _mode_path(run_dir).write_text(f"{mode_line}\n{' '.join(command)}", encoding="utf-8", newline="\n")
 
     with open(log_path, "wb") as log_file:
         subprocess.Popen(
@@ -110,6 +113,25 @@ def start(config: RunConfig, run_dir: Path, extra_args: Sequence[str] = ()) -> i
 
     print(f"GATE STARTED; now run: nightshift gate wait {run_dir} 1")
     return 0
+
+
+def start(config: RunConfig, run_dir: Path, extra_args: Sequence[str] = ()) -> int:
+    """Start the test command detached behind the gate, or refuse to double start."""
+    blocked = _preflight(config, run_dir)
+    if blocked is not None:
+        return blocked
+    return _launch(config, run_dir, [*config.test, *extra_args], "start")
+
+
+def file(config: RunConfig, run_dir: Path, test_file: str, module: str) -> int:
+    """Start one test file with coverage of one module behind the gate."""
+    blocked = _preflight(config, run_dir)
+    if blocked is not None:
+        return blocked
+    # Plain --cov, not --cov=<module>: pointing pytest-cov at a module imports it before
+    # the tests do, which broke a SQLAlchemy C extension in a real run.
+    command = [*config.test, test_file, "--cov", "--cov-report=term-missing", "--cov-fail-under=0"]
+    return _launch(config, run_dir, command, f"file {module}")
 
 
 def _run_is_going(run_dir: Path) -> bool:
@@ -147,6 +169,15 @@ def wait(config: RunConfig, run_dir: Path, n: int) -> int:
         print("GATE FAIL")
         return 1
     print(summary.line)
+    kind, module = _mode(run_dir)
+    if kind == "file":
+        coverage_line = _coverage_line(text, module or "")
+        print(coverage_line if coverage_line is not None else f"{module} 100% (fully covered)")
+        if summary.passed >= 1 and summary.failed == 0:
+            print("GATE PASS")
+            return 0
+        print("GATE FAIL")
+        return 1
     if summary.failed == 0 and summary.errors == 0 and summary.passed >= config.min_passed:
         print("GATE PASS")
         return 0
@@ -173,6 +204,30 @@ def _last_percent(log_path: Path) -> int:
 def _failed_error_lines(text: str) -> list[str]:
     """Return the FAILED and ERROR lines of a test log."""
     return [line for line in text.splitlines() if "FAILED" in line or "ERROR" in line]
+
+
+def _mode(run_dir: Path) -> tuple[str, str | None]:
+    """Return (kind, module) from .gate/mode; kind is 'start' or 'file'."""
+    path = _mode_path(run_dir)
+    if not path.is_file():
+        return "start", None
+    lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    if not lines:
+        return "start", None
+    first = lines[0]
+    if first.startswith("file "):
+        return "file", first[len("file ") :]
+    return "start", None
+
+
+def _coverage_line(log_text: str, module: str) -> str | None:
+    """Return the coverage report line for the module, or None when the report skipped it."""
+    target = module.replace("\\", "/")
+    for line in log_text.splitlines():
+        parts = line.split()
+        if parts and parts[0].replace("\\", "/") == target:
+            return line.strip()
+    return None
 
 
 def parse_summary(log_text: str) -> Summary:

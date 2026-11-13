@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from nightshift.config import RunConfig
-from nightshift.gate import parse_summary, start, wait
+from nightshift.gate import file, parse_summary, start, wait
 
 PASS_CMD = [sys.executable, "-c", "print('3 passed in 0.01s')"]
 FAIL_CMD = [sys.executable, "-c", "print('1 failed, 2 passed in 0.01s'); raise SystemExit(1)"]
@@ -140,3 +140,99 @@ def test_wait_without_summary_line_fails_with_hint(tmp_path: Path, capsys: pytes
     out = capsys.readouterr().out
     assert "no pytest summary line: is -q passed twice? (pytest -qq hides it)" in out
     assert "GATE FAIL" in out
+
+
+_COV_LOG = """\
+tests/test_gate.py .                                                    [100%]
+============================= coverage: platform win32 =============================
+Name                    Stmts   Miss  Cover   Missing
+-----------------------------------------------------
+src/nightshift/gate.py     120     8    93%   45-47, 60
+src/nightshift/cli.py       80     0   100%
+-----------------------------------------------------
+TOTAL                      200     8    96%
+
+============================== 5 passed in 1.2s ===============================
+"""
+
+
+def _file_run(base: Path, log_text: str, module: str) -> tuple[RunConfig, Path]:
+    """Build a finished file-mode gate run with the given fake log text."""
+    base.mkdir(parents=True, exist_ok=True)
+    config = _config(base)
+    run_dir = _run_dir(base)
+    gate_dir = run_dir / ".gate"
+    gate_dir.mkdir()
+    (gate_dir / "log").write_text(log_text, encoding="utf-8")
+    (gate_dir / "done").write_text("0\n", encoding="utf-8")
+    (gate_dir / "mode").write_text(f"file {module}\npytest tests/test_gate.py --cov", encoding="utf-8")
+    return config, run_dir
+
+
+def test_file_mode_prints_module_coverage_line(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    config, run_dir = _file_run(tmp_path, _COV_LOG, "src/nightshift/gate.py")
+
+    assert wait(config, run_dir, 1) == 0
+    out = capsys.readouterr().out
+    assert "93%" in out
+    assert "(fully covered)" not in out
+    assert "GATE PASS" in out
+
+
+def test_file_mode_missing_module_means_fully_covered(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    config, run_dir = _file_run(tmp_path, _COV_LOG, "src/nightshift/render.py")
+
+    assert wait(config, run_dir, 1) == 0
+    out = capsys.readouterr().out
+    assert "src/nightshift/render.py 100% (fully covered)" in out
+    assert "GATE PASS" in out
+
+
+def test_file_mode_matches_both_separators(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    backslash_log = _COV_LOG.replace("src/nightshift/gate.py", "src\\nightshift\\gate.py")
+
+    config, run_dir = _file_run(tmp_path / "a", backslash_log, "src/nightshift/gate.py")
+    assert wait(config, run_dir, 1) == 0
+    out = capsys.readouterr().out
+    assert "93%" in out
+    assert "(fully covered)" not in out
+
+    config2, run_dir2 = _file_run(tmp_path / "b", _COV_LOG, "src\\nightshift\\gate.py")
+    assert wait(config2, run_dir2, 1) == 0
+    out2 = capsys.readouterr().out
+    assert "93%" in out2
+    assert "(fully covered)" not in out2
+
+
+def test_file_mode_fails_when_tests_fail(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    failing_log = _COV_LOG.replace("5 passed in 1.2s", "2 failed, 3 passed in 1.2s")
+    config, run_dir = _file_run(tmp_path, failing_log, "src/nightshift/gate.py")
+
+    assert wait(config, run_dir, 1) == 1
+    out = capsys.readouterr().out
+    assert "GATE FAIL" in out
+
+
+def test_file_refuses_when_lint_fails(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    config = _config(tmp_path, lint=LINT_FAIL_CMD)
+    run_dir = _run_dir(tmp_path)
+
+    assert file(config, run_dir, "tests/test_gate.py", "src/nightshift/gate") == 1
+    err = capsys.readouterr().err
+    assert "GATE NOT STARTED: lint failed" in err
+    assert not (run_dir / ".gate" / "log").exists()
+
+
+def test_file_start_then_wait_reports_fully_covered(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    config = _config(tmp_path)
+    run_dir = _run_dir(tmp_path)
+
+    assert file(config, run_dir, "tests/test_gate.py", "src/nightshift/gate") == 0
+    out = capsys.readouterr().out
+    assert "GATE STARTED" in out
+
+    assert wait(config, run_dir, 1) == 0
+    out = capsys.readouterr().out
+    assert "3 passed in 0.01s" in out
+    assert "src/nightshift/gate 100% (fully covered)" in out
+    assert "GATE PASS" in out

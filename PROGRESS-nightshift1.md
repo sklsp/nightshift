@@ -7,7 +7,7 @@
 - [x] N7. progress: read the progress file (57 passed in 0.31s)
 - [x] N8. gate: start and wait (61 passed in 0.75s)
 - [x] N9. gate: summary parsing (68 passed in 0.82s)
-- [ ] N10. gate: one test file with coverage of one module
+- [x] N10. gate: one test file with coverage of one module (74 passed in 1.09s)
 - [ ] N11. agent: launch and status adapters
 - [ ] N12. supervise: the loop
 - [ ] N13. cli: status
