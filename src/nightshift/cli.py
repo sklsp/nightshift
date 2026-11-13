@@ -9,7 +9,7 @@ from pathlib import Path
 from nightshift import __version__
 from nightshift.agent import AgentError
 from nightshift.config import ConfigError, load_config
-from nightshift.gate import parse_summary
+from nightshift.gate import file, parse_summary, start, wait
 from nightshift.items import ItemsError, load_items
 from nightshift.progress import read_progress
 from nightshift.render import RenderError, render_run
@@ -74,6 +74,18 @@ def build_parser() -> argparse.ArgumentParser:
     status_parser = subparsers.add_parser("status", help="print a one-screen summary of the run")
     status_parser.add_argument("run_dir", type=Path, help="path of an existing run directory")
 
+    gate_parser = subparsers.add_parser("gate", help="run a check behind the detached gate")
+    gate_sub = gate_parser.add_subparsers(dest="gate_command", required=True)
+    gate_start = gate_sub.add_parser("start", help="run lint, then start the test command detached")
+    gate_start.add_argument("run_dir", type=Path, help="path of an existing run directory")
+    gate_wait = gate_sub.add_parser("wait", help="wait for the gated run and report pass or fail")
+    gate_wait.add_argument("run_dir", type=Path, help="path of an existing run directory")
+    gate_wait.add_argument("n", type=int, help="call number; use a new one on every call")
+    gate_file = gate_sub.add_parser("file", help="start one test file with coverage of one module")
+    gate_file.add_argument("run_dir", type=Path, help="path of an existing run directory")
+    gate_file.add_argument("test_file", help="path to the test file, relative to the repo root")
+    gate_file.add_argument("module", help="module name used for the coverage report line")
+
     return parser
 
 
@@ -89,6 +101,8 @@ def main(argv: list[str] | None = None) -> int:
         return _supervise(args.run_dir)
     if args.command == "status":
         return _status(args.run_dir)
+    if args.command == "gate":
+        return _gate(args)
     parser.print_help()
     return 2
 
@@ -134,6 +148,20 @@ def _supervise(run_dir: Path) -> int:
     except (ConfigError, ItemsError, AgentError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
+
+
+def _gate(args: argparse.Namespace) -> int:
+    """Run one gate subcommand against an existing run directory."""
+    try:
+        config = load_config(args.run_dir)
+    except ConfigError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    if args.gate_command == "start":
+        return start(config, args.run_dir)
+    if args.gate_command == "wait":
+        return wait(config, args.run_dir, args.n)
+    return file(config, args.run_dir, args.test_file, args.module)
 
 
 def _status(run_dir: Path) -> int:
@@ -207,4 +235,3 @@ def _print_commits(repo: Path) -> None:
         return
     for line in result.stdout.rstrip("\n").splitlines():
         print(line)
-

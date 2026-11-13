@@ -30,3 +30,9 @@ def test_lint_files_returns_only_problem_files(tmp_path: Path) -> None:
     result = lint_files([bad, good])
     assert list(result) == [bad]
     assert result[bad] == ["line 1: em dash"]
+
+
+def test_repo_docs_pass_lint() -> None:
+    repo_root = Path(__file__).resolve().parent.parent
+    docs = [repo_root / "README.md", repo_root / "docs" / "LESSONS.md"]
+    assert lint_files(docs) == {}

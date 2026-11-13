@@ -2,6 +2,7 @@
 
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -9,12 +10,14 @@ import pytest
 from nightshift.cli import main
 
 
-def _make_run(tmp_path: Path, repo: Path) -> Path:
+def _make_run(tmp_path: Path, repo: Path, test: list[str] | None = None) -> Path:
     """Create a run dir whose config points at repo with prefix N."""
+    if test is None:
+        test = ["pytest"]
     run_dir = tmp_path / "run"
     run_dir.mkdir()
     (run_dir / "run.toml").write_text(
-        f'[run]\nname = "st"\nrepo = "{repo.as_posix()}"\nprefix = "N"\n[check]\ntest = ["pytest"]\n',
+        f'[run]\nname = "st"\nrepo = "{repo.as_posix()}"\nprefix = "N"\n[check]\ntest = {test!r}\n',
         encoding="utf-8",
     )
     return run_dir
@@ -26,9 +29,7 @@ def _git(repo: Path, *args: str) -> None:
     assert result.returncode == 0, f"git {' '.join(args)} failed: {result.stderr}"
 
 
-def test_status_prints_progress_gate_and_commits(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_status_prints_progress_gate_and_commits(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     if shutil.which("git") is None:
         pytest.skip("git not on PATH")
 
@@ -71,12 +72,44 @@ def test_status_without_progress_file(tmp_path: Path, capsys: pytest.CaptureFixt
     assert lines[-1].startswith("commits:")
 
 
-
 def test_version_flag_prints_version_and_exits_zero(capsys: pytest.CaptureFixture[str]) -> None:
     with pytest.raises(SystemExit) as excinfo:
         main(["--version"])
     assert excinfo.value.code == 0
     assert "nightshift 0.1.0" in capsys.readouterr().out
+
+
+def test_gate_start_and_wait_via_cli(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    fast = [sys.executable, "-c", "pass"]
+    run_dir = _make_run(tmp_path, repo, test=fast)
+    assert main(["gate", "start", str(run_dir)]) == 0
+    out = capsys.readouterr().out
+    assert "GATE STARTED" in out
+    assert f"nightshift gate wait {run_dir} 1" in out
+    # the child finishes at once; wait blocks until done, then reports no summary line
+    assert main(["gate", "wait", str(run_dir), "1"]) == 1
+    out = capsys.readouterr().out
+    assert "no pytest summary line" in out
+
+
+def test_gate_file_via_cli(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    fast = [sys.executable, "-c", "pass"]
+    run_dir = _make_run(tmp_path, repo, test=fast)
+    assert main(["gate", "file", str(run_dir), "tests/test_x.py", "nightshift.x"]) == 0
+    out = capsys.readouterr().out
+    assert "GATE STARTED" in out
+
+
+def test_gate_with_missing_config_errors(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    assert main(["gate", "wait", str(empty), "1"]) == 1
+    err = capsys.readouterr().err
+    assert "error:" in err
 
 
 def test_no_command_prints_help_and_returns_two(capsys: pytest.CaptureFixture[str]) -> None:
