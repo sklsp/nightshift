@@ -5,9 +5,11 @@ import sys
 from pathlib import Path
 
 from nightshift import __version__
+from nightshift.agent import AgentError
 from nightshift.config import ConfigError, load_config
 from nightshift.items import ItemsError, load_items
 from nightshift.render import RenderError, render_run
+from nightshift.supervise import supervise
 
 _EXAMPLE_RUN_TOML = """\
 # nightshift run configuration. Every key is shown below; the required keys
@@ -60,6 +62,11 @@ def build_parser() -> argparse.ArgumentParser:
     build_parser = subparsers.add_parser("build", help="render the spec files into the run directory")
     build_parser.add_argument("run_dir", type=Path, help="path of an existing run directory")
 
+    supervise_parser = subparsers.add_parser(
+        "supervise", help="relaunch the agent until every item is done or a stop condition hits"
+    )
+    supervise_parser.add_argument("run_dir", type=Path, help="path of an existing run directory")
+
     return parser
 
 
@@ -71,6 +78,8 @@ def main(argv: list[str] | None = None) -> int:
         return _init(args.run_dir)
     if args.command == "build":
         return _build(args.run_dir)
+    if args.command == "supervise":
+        return _supervise(args.run_dir)
     parser.print_help()
     return 2
 
@@ -106,4 +115,14 @@ def _build(run_dir: Path) -> int:
     for path in written:
         print(path)
     return 0
+
+
+def _supervise(run_dir: Path) -> int:
+    """Load config and supervise the agent until every item is done."""
+    try:
+        config = load_config(run_dir)
+        return supervise(config, run_dir)
+    except (ConfigError, ItemsError, AgentError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
 

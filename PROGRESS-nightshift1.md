@@ -9,7 +9,7 @@
 - [x] N9. gate: summary parsing (68 passed in 0.82s)
 - [x] N10. gate: one test file with coverage of one module (74 passed in 1.09s)
 - [x] N11. agent: launch and status adapters (81 passed in 1.44s)
-- [ ] N12. supervise: the loop
+- [x] N12. supervise: the loop (86 passed in 1.48s)
 - [ ] N13. cli: status
 - [ ] N14. docs: README and the lessons
 - [ ] N15. examples: a complete example run
