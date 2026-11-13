@@ -12,5 +12,5 @@
 - [x] N12. supervise: the loop (86 passed in 1.48s)
 - [x] N13. cli: status (88 passed in 1.78s)
 - [x] N14. docs: README and the lessons (92 passed in 2.01s)
-- [ ] N15. examples: a complete example run
+- [x] N15. examples: a complete example run (93 passed in 2.01s)
 - [ ] N16. ci: GitHub Actions

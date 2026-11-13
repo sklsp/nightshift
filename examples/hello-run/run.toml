@@ -1,0 +1,6 @@
+[run]
+name = "hello"
+repo = "../hello-repo"
+
+[check]
+test = ["python", "-m", "pytest"]
