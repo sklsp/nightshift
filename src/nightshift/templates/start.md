@@ -17,7 +17,7 @@ $items_list
   Resume: find the first item that is not ticked [x] and not BLOCKED, open its file. If the working tree already
   holds changes for that item, a session before you made them: review `git diff --stat` and `git status` once,
   finish what is missing, run the check.
-- After each item: tick it as `- [x] <id>. <title> (<last pytest line>)` in the same commit, then open the next
+- After each item: tick it as `- [x] ${prefix}<n>. <title> (<last pytest line>)` in the same commit, then open the next
   item file straight away. No summaries between items.
 
 THE CHECK (cwd = repo; before EVERY commit, it must pass)
@@ -37,7 +37,7 @@ RULES
 - **Tests:** every behaviour an item names gets a test that fails if the behaviour breaks. Literal expected values.
   Never delete or weaken a test from an earlier item; if a later item changes behaviour on purpose, update the test
   and say why in the commit body.
-- **Commits:** one commit per item, message `<id>: <title>` (for example `T1: fix the parser`), body = the last
+- **Commits:** one commit per item, message `${prefix}<n>: <title>` (for example `${prefix}1: fix the parser`), body = the last
   pytest line. The tick goes in the same commit. Stage only the files of the item plus $progress_file, with
   `git add <path>`. Never `git add -A` or `git add .`. Never `--amend`.
 - **Terminal:** code must work on Windows and Linux (pathlib, no shell=True unless an item says so, subprocess
@@ -45,7 +45,7 @@ RULES
 - **Text:** no em dashes or en dashes anywhere, in code, docs or commit messages. Plain, short English.
 - **Never** run git checkout, switch, branch, merge, rebase, stash, reset, restore, clean or push.
 - **Failures:** if an item fails 3 times, write what you tried to BLOCKED.md in the run directory, undo your
-  uncommitted edits of that item by hand, tick it as `- [ ] <id>. ... BLOCKED`, commit that, go on.
+  uncommitted edits of that item by hand, tick it as `- [ ] ${prefix}<n>. ... BLOCKED`, commit that, go on.
 
 **Final message:** items 1 to $total with a commit hash each (or BLOCKED), the last pytest line, and a section
 "Not done exactly as written:" (write "none" if there are none).

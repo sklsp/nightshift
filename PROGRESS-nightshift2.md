@@ -1,7 +1,7 @@
 # nightshift run nightshift2
 
 - [x] M1. render: absolute paths in the spec (95 passed in 2.35s)
-- [ ] M2. render: the tick line uses the real prefix
+- [x] M2. render: the tick line uses the real prefix (96 passed in 2.35s)
 - [ ] M3. supervise: absolute run dir and a grace period after launch
 - [ ] M4. repo: line endings and ignore file
 - [ ] M5. cli: doctor

@@ -53,6 +53,7 @@ def _start_text(config: RunConfig, total: int, run_dir: Path) -> str:
     return template.substitute(
         name=config.name,
         branch=config.branch,
+        prefix=config.prefix,
         total=str(total),
         first_item=item_paths[0],
         items_list="\n".join(f"  {path}" for path in item_paths),

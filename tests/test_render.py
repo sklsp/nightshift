@@ -103,6 +103,16 @@ def test_spec_files_use_absolute_paths(tmp_path: Path) -> None:
     assert progress_file in start_text
 
 
+def test_tick_line_uses_real_prefix(tmp_path: Path) -> None:
+    config = RunConfig(name="demo", repo=tmp_path / "repo", test=["pytest"], prefix="QA")
+    out = tmp_path / "out"
+    written = render_run(config, _items(), out)
+    start_text = (out / "00-start.md").read_text(encoding="utf-8")
+    assert "- [x] QA<n>. <title> (<last pytest line>)" in start_text
+    for path in written:
+        assert "<id>" not in path.read_text(encoding="utf-8")
+
+
 def test_render_run_refuses_item_body_with_dash(tmp_path: Path) -> None:
     items = [Item(number=1, title="first item", body="bad \u2014 dash")]
     with pytest.raises(RenderError, match="fix items.md") as excinfo:
