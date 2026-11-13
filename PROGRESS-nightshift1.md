@@ -4,7 +4,7 @@
 - [x] N4. render: start file, item files, checklist (41 passed in 0.18s)
 - [x] N5. textlint: refuse dashes and trailing spaces (47 passed in 0.24s)
 - [x] N6. cli: init and build (50 passed in 0.27s)
-- [ ] N7. progress: read the progress file
+- [x] N7. progress: read the progress file (57 passed in 0.31s)
 - [ ] N8. gate: start and wait
 - [ ] N9. gate: summary parsing
 - [ ] N10. gate: one test file with coverage of one module
