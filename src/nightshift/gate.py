@@ -8,6 +8,7 @@ import sys
 import tempfile
 import time
 from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
 
 from nightshift.config import RunConfig
@@ -20,8 +21,21 @@ _FRESH_SECONDS = 120
 _TAIL_LINES = 20
 _POLL_SECONDS = 0.1
 
-_COUNT_RE = re.compile(r"(\d+)\s+(failed|errors?|passed)\b")
+_COUNT_RE = re.compile(r"(\d+)\s+(passed|failed|errors?|skipped|xfailed|xpassed)\b")
 _PERCENT_RE = re.compile(r"\[\s*(\d{1,3})%\]")
+
+
+@dataclass(frozen=True)
+class Summary:
+    """Counts parsed from one pytest summary line."""
+
+    passed: int
+    failed: int
+    errors: int
+    skipped: int
+    xfailed: int
+    xpassed: int
+    line: str | None
 
 
 def _gate_dir(run_dir: Path) -> Path:
@@ -126,11 +140,14 @@ def wait(config: RunConfig, run_dir: Path, n: int) -> int:
     text = _log_text(run_dir)
     for line in _failed_error_lines(text):
         print(line)
-    summary = _summary_line(text)
-    if summary is not None:
-        print(summary)
-    failed, errors, passed = _counts(text)
-    if failed == 0 and errors == 0 and passed >= config.min_passed:
+    summary = parse_summary(text)
+    if summary.line is None:
+        # This cost a whole night once; the hint is the point.
+        print("no pytest summary line: is -q passed twice? (pytest -qq hides it)")
+        print("GATE FAIL")
+        return 1
+    print(summary.line)
+    if summary.failed == 0 and summary.errors == 0 and summary.passed >= config.min_passed:
         print("GATE PASS")
         return 0
     print("GATE FAIL")
@@ -158,29 +175,41 @@ def _failed_error_lines(text: str) -> list[str]:
     return [line for line in text.splitlines() if "FAILED" in line or "ERROR" in line]
 
 
-def _summary_line(text: str) -> str | None:
-    """Return the last log line that carries pass/fail counts, if any."""
-    for line in reversed(text.splitlines()):
-        if _COUNT_RE.search(line):
-            return line.strip()
-    return None
+def parse_summary(log_text: str) -> Summary:
+    """Return counts from the last pytest summary line, or an empty Summary when there is none."""
+    for raw in reversed(log_text.splitlines()):
+        if _COUNT_RE.search(raw):
+            return _summary_from_line(raw.strip().strip("=").strip())
+    return Summary(passed=0, failed=0, errors=0, skipped=0, xfailed=0, xpassed=0, line=None)
 
 
-def _counts(text: str) -> tuple[int, int, int]:
-    """Count failed, errors and passed from the log; the last count wins."""
-    failed = 0
-    errors = 0
-    passed = 0
-    for line in text.splitlines():
-        for match in _COUNT_RE.finditer(line):
-            value = int(match.group(1))
-            if match.group(2) == "failed":
-                failed = value
-            elif match.group(2).startswith("error"):
-                errors = value
-            else:
-                passed = value
-    return failed, errors, passed
+def _summary_from_line(line: str) -> Summary:
+    """Fill the Summary fields from one summary line."""
+    passed = failed = errors = skipped = xfailed = xpassed = 0
+    for match in _COUNT_RE.finditer(line):
+        value = int(match.group(1))
+        word = match.group(2)
+        if word == "passed":
+            passed += value
+        elif word == "failed":
+            failed += value
+        elif word.startswith("error"):
+            errors += value
+        elif word == "skipped":
+            skipped += value
+        elif word == "xfailed":
+            xfailed += value
+        else:  # xpassed
+            xpassed += value
+    return Summary(
+        passed=passed,
+        failed=failed,
+        errors=errors,
+        skipped=skipped,
+        xfailed=xfailed,
+        xpassed=xpassed,
+        line=line,
+    )
 
 
 def _child_env() -> dict[str, str]:

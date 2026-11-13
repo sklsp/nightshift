@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from nightshift.config import RunConfig
-from nightshift.gate import start, wait
+from nightshift.gate import parse_summary, start, wait
 
 PASS_CMD = [sys.executable, "-c", "print('3 passed in 0.01s')"]
 FAIL_CMD = [sys.executable, "-c", "print('1 failed, 2 passed in 0.01s'); raise SystemExit(1)"]
@@ -87,3 +87,56 @@ def test_second_start_while_running_does_not_launch_again(tmp_path: Path, capsys
     # A second launch would truncate the log and create a done file; neither happened.
     assert log_path.read_text(encoding="utf-8") == "tick\n"
     assert not (gate_dir / "done").exists()
+
+
+def test_parse_summary_plain() -> None:
+    summary = parse_summary("5 passed in 1.2s")
+    assert (summary.passed, summary.failed, summary.errors) == (5, 0, 0)
+    assert (summary.skipped, summary.xfailed, summary.xpassed) == (0, 0, 0)
+    assert summary.line == "5 passed in 1.2s"
+
+
+def test_parse_summary_mixed() -> None:
+    summary = parse_summary("1 failed, 4 passed, 2 skipped, 1 xfailed")
+    assert (summary.passed, summary.failed, summary.errors) == (4, 1, 0)
+    assert (summary.skipped, summary.xfailed, summary.xpassed) == (2, 1, 0)
+
+
+def test_parse_summary_errors_plural_and_singular() -> None:
+    plural = parse_summary("==== 2 errors in 0.5s ====")
+    assert plural.errors == 2
+    singular = parse_summary("1 error in 0.1s")
+    assert singular.errors == 1
+
+
+def test_parse_summary_ignores_framing_and_duration() -> None:
+    summary = parse_summary("===== 5 passed, 1 xpassed in 2.0s =====")
+    assert (summary.passed, summary.xpassed) == (5, 1)
+    assert summary.line == "5 passed, 1 xpassed in 2.0s"
+
+
+def test_parse_summary_last_line_wins() -> None:
+    log = "3 passed in 1.0s\n.....\n7 failed, 2 passed in 2.0s"
+    summary = parse_summary(log)
+    assert (summary.passed, summary.failed) == (2, 7)
+    assert summary.line == "7 failed, 2 passed in 2.0s"
+
+
+def test_parse_summary_none() -> None:
+    summary = parse_summary(".....\n")
+    assert summary.line is None
+    assert (summary.passed, summary.failed, summary.errors) == (0, 0, 0)
+
+
+def test_wait_without_summary_line_fails_with_hint(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    config = _config(tmp_path)
+    run_dir = _run_dir(tmp_path)
+    gate_dir = run_dir / ".gate"
+    gate_dir.mkdir()
+    (gate_dir / "log").write_text(".....\n", encoding="utf-8")
+    (gate_dir / "done").write_text("0\n", encoding="utf-8")
+
+    assert wait(config, run_dir, 1) == 1
+    out = capsys.readouterr().out
+    assert "no pytest summary line: is -q passed twice? (pytest -qq hides it)" in out
+    assert "GATE FAIL" in out
