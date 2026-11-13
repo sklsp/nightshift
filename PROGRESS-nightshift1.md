@@ -11,6 +11,6 @@
 - [x] N11. agent: launch and status adapters (81 passed in 1.44s)
 - [x] N12. supervise: the loop (86 passed in 1.48s)
 - [x] N13. cli: status (88 passed in 1.78s)
-- [ ] N14. docs: README and the lessons
+- [x] N14. docs: README and the lessons (92 passed in 2.01s)
 - [ ] N15. examples: a complete example run
 - [ ] N16. ci: GitHub Actions
