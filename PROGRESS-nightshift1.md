@@ -1,0 +1,16 @@
+- [x] N1. build: package skeleton (2 passed in 0.01s)
+- [ ] N2. config: run.toml loader
+- [ ] N3. items: parse items.md
+- [ ] N4. render: start file, item files, checklist
+- [ ] N5. textlint: refuse dashes and trailing spaces
+- [ ] N6. cli: init and build
+- [ ] N7. progress: read the progress file
+- [ ] N8. gate: start and wait
+- [ ] N9. gate: summary parsing
+- [ ] N10. gate: one test file with coverage of one module
+- [ ] N11. agent: launch and status adapters
+- [ ] N12. supervise: the loop
+- [ ] N13. cli: status
+- [ ] N14. docs: README and the lessons
+- [ ] N15. examples: a complete example run
+- [ ] N16. ci: GitHub Actions
