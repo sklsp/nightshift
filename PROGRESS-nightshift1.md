@@ -2,7 +2,7 @@
 - [x] N2. config: run.toml loader (22 passed in 0.12s)
 - [x] N3. items: parse items.md (34 passed in 0.34s)
 - [x] N4. render: start file, item files, checklist (41 passed in 0.18s)
-- [ ] N5. textlint: refuse dashes and trailing spaces
+- [x] N5. textlint: refuse dashes and trailing spaces (47 passed in 0.24s)
 - [ ] N6. cli: init and build
 - [ ] N7. progress: read the progress file
 - [ ] N8. gate: start and wait

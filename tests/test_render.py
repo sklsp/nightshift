@@ -2,9 +2,11 @@
 
 from pathlib import Path
 
+import pytest
+
 from nightshift.config import RunConfig
 from nightshift.items import Item
-from nightshift.render import render_run
+from nightshift.render import RenderError, render_run
 
 
 def _config(tmp_path: Path) -> RunConfig:
@@ -86,3 +88,12 @@ def test_render_twice_gives_identical_bytes(tmp_path: Path) -> None:
     paths_b = render_run(_config(tmp_path), _items(), second)
     for path_a, path_b in zip(paths_a, paths_b, strict=True):
         assert path_a.read_bytes() == path_b.read_bytes()
+
+
+def test_render_run_refuses_item_body_with_dash(tmp_path: Path) -> None:
+    items = [Item(number=1, title="first item", body="bad \u2014 dash")]
+    with pytest.raises(RenderError, match="fix items.md") as excinfo:
+        render_run(_config(tmp_path), items, tmp_path / "out")
+    message = str(excinfo.value)
+    assert "item-01.md" in message
+    assert "em dash" in message

@@ -6,6 +6,11 @@ from string import Template
 
 from nightshift.config import RunConfig
 from nightshift.items import Item
+from nightshift.textlint import lint_files
+
+
+class RenderError(Exception):
+    """Raised when rendered files fail the text check."""
 
 
 def render_run(config: RunConfig, items: list[Item], out_dir: Path) -> list[Path]:
@@ -24,7 +29,20 @@ def render_run(config: RunConfig, items: list[Item], out_dir: Path) -> list[Path
     checklist_path = out_dir / "checklist.txt"
     checklist_path.write_text("\n".join(checklist) + "\n", encoding="utf-8", newline="\n")
     written.append(checklist_path)
+
+    problems = lint_files(written)
+    if problems:
+        raise RenderError(_render_error_message(problems))
     return written
+
+
+def _render_error_message(problems: dict[Path, list[str]]) -> str:
+    """Build the RenderError message listing every file and problem."""
+    lines = ["rendered files have text problems (fix items.md):"]
+    for path, found in problems.items():
+        lines.append(f"{path.name}:")
+        lines.extend(f"  {problem}" for problem in found)
+    return "\n".join(lines)
 
 
 def _start_text(config: RunConfig, total: int) -> str:
