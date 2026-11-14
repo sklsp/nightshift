@@ -6,5 +6,5 @@
 - [x] M4. repo: line endings and ignore file (98 passed in 2.33s)
 - [x] M5. cli: doctor (101 passed in 2.76s)
 - [x] M6. gate: clean and stale runs (106 passed in 2.99s)
-- [ ] M7. cli: status --json
+- [x] M7. cli: status --json (108 passed in 3.25s)
 - [ ] M8. release: version 0.2.0 and changelog

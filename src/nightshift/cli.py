@@ -1,6 +1,7 @@
 """Command line interface for nightshift."""
 
 import argparse
+import json
 import re
 import shutil
 import subprocess
@@ -12,9 +13,9 @@ from tempfile import TemporaryDirectory
 from nightshift import __version__
 from nightshift.agent import AgentError
 from nightshift.config import ConfigError, RunConfig, load_config
-from nightshift.gate import clean, file, parse_summary, start, wait
+from nightshift.gate import clean, file, parse_summary, start, state, wait
 from nightshift.items import ItemsError, load_items
-from nightshift.progress import read_progress
+from nightshift.progress import Progress, read_progress
 from nightshift.render import RenderError, render_run
 from nightshift.supervise import supervise
 
@@ -76,6 +77,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     status_parser = subparsers.add_parser("status", help="print a one-screen summary of the run")
     status_parser.add_argument("run_dir", type=Path, help="path of an existing run directory")
+    status_parser.add_argument("--json", action="store_true", help="print the summary as one JSON object")
 
     doctor_parser = subparsers.add_parser(
         "doctor", help="check that the run dir is ready for an unattended run"
@@ -112,7 +114,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "supervise":
         return _supervise(args.run_dir)
     if args.command == "status":
-        return _status(args.run_dir)
+        return _status(args.run_dir, as_json=args.json)
     if args.command == "doctor":
         return _doctor(args.run_dir)
     if args.command == "gate":
@@ -260,7 +262,7 @@ def _gate(args: argparse.Namespace) -> int:
     return file(config, args.run_dir, args.test_file, args.module)
 
 
-def _status(run_dir: Path) -> int:
+def _status(run_dir: Path, as_json: bool = False) -> int:
     """Print a one-screen summary of the run and exit 0."""
     try:
         config = load_config(run_dir)
@@ -270,6 +272,11 @@ def _status(run_dir: Path) -> int:
 
     progress_path = config.repo / f"PROGRESS-{config.name}.md"
     progress = read_progress(progress_path, config.prefix)
+    if as_json:
+        payload = _status_payload(run_dir, config, progress, progress_path)
+        print(json.dumps(payload))
+        return 0
+
     print(f"{config.name}: {len(progress.done)}/{progress.total} done")
     if progress.blocked:
         print("blocked: " + ", ".join(f"{config.prefix}{n}" for n in progress.blocked))
@@ -298,6 +305,27 @@ def _next_title(progress_path: Path, prefix: str, number: int) -> str | None:
     return None
 
 
+def _status_payload(
+    run_dir: Path, config: RunConfig, progress: Progress, progress_path: Path
+) -> dict[str, object]:
+    """Build the JSON summary of one run; every key is always present."""
+    next_item = progress.next_item
+    if next_item is None:
+        next_title: str | None = None
+    else:
+        next_title = _next_title(progress_path, config.prefix, next_item)
+    return {
+        "name": config.name,
+        "total": progress.total,
+        "done": list(progress.done),
+        "blocked": list(progress.blocked),
+        "next_item": next_item,
+        "next_title": next_title,
+        "gate": state(run_dir),
+        "commits": _commit_dicts(config.repo) or [],
+    }
+
+
 def _last_gate_line(run_dir: Path) -> str:
     """One line describing the last gated test run, if any."""
     log_path = run_dir / ".gate" / "log"
@@ -313,8 +341,8 @@ def _last_gate_line(run_dir: Path) -> str:
     return f"last gate: exit {code_text}: {summary.line}"
 
 
-def _print_commits(repo: Path) -> None:
-    """Print the last five commit subjects of repo, or a note when that is impossible."""
+def _commit_dicts(repo: Path) -> list[dict[str, str]] | None:
+    """Return the last five commits of repo as {hash, subject}, or None when git is unavailable."""
     try:
         result = subprocess.run(
             ["git", "log", "-5", "--format=%h %s"],
@@ -324,10 +352,24 @@ def _print_commits(repo: Path) -> None:
             stdin=subprocess.DEVNULL,
         )
     except FileNotFoundError:
+        return None
+    if result.returncode != 0 or not result.stdout.strip():
+        return []
+    commits = []
+    for line in result.stdout.rstrip("\n").splitlines():
+        commit_hash, _, subject = line.partition(" ")
+        commits.append({"hash": commit_hash, "subject": subject})
+    return commits
+
+
+def _print_commits(repo: Path) -> None:
+    """Print the last five commit subjects of repo, or a note when that is impossible."""
+    commits = _commit_dicts(repo)
+    if commits is None:
         print("commits: skipped (git not on PATH)")
         return
-    if result.returncode != 0 or not result.stdout.strip():
+    if not commits:
         print("commits: none")
         return
-    for line in result.stdout.rstrip("\n").splitlines():
-        print(line)
+    for commit in commits:
+        print(f"{commit['hash']} {commit['subject']}")

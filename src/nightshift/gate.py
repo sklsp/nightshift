@@ -151,6 +151,18 @@ def clean(run_dir: Path) -> int:
     return 0
 
 
+def state(run_dir: Path) -> str:
+    """Return 'pass', 'fail', 'running', 'stale' or 'none' for the last gated run."""
+    log_path = _log_path(run_dir)
+    if not log_path.is_file():
+        return "none"
+    done_path = _done_path(run_dir)
+    if not done_path.is_file():
+        return "stale" if _is_stale(run_dir) else "running"
+    code_text = done_path.read_text(encoding="utf-8", errors="replace").strip()
+    return "pass" if code_text == "0" else "fail"
+
+
 def _run_is_going(run_dir: Path) -> bool:
     """True when a previous start is still fresh enough to count as running."""
     log_path = _log_path(run_dir)
