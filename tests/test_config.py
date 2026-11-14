@@ -45,6 +45,7 @@ status = ["lms", "status"]
 running_pattern = "is running"
 poll_seconds = 10
 max_sessions = 5
+launch_grace_polls = 2
 """,
     )
     cfg = load_config(tmp_path)
@@ -63,6 +64,7 @@ max_sessions = 5
     assert cfg.running_pattern == "is running"
     assert cfg.poll_seconds == 10
     assert cfg.max_sessions == 5
+    assert cfg.launch_grace_polls == 2
 
 
 def test_defaults_when_optional_keys_missing(tmp_path: Path) -> None:
@@ -79,6 +81,7 @@ def test_defaults_when_optional_keys_missing(tmp_path: Path) -> None:
     assert cfg.running_pattern == "running"
     assert cfg.poll_seconds == 30
     assert cfg.max_sessions == 20
+    assert cfg.launch_grace_polls == 4
 
 
 def test_relative_repo_resolved_against_run_dir(tmp_path: Path) -> None:

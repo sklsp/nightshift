@@ -28,13 +28,14 @@ class RunConfig:
     running_pattern: str = "running"
     poll_seconds: int = 30
     max_sessions: int = 20
+    launch_grace_polls: int = 4
 
 
 _SECTIONS = ("run", "check", "agent")
 
 _RUN_KEYS = {"name", "repo", "branch", "prefix"}
 _CHECK_KEYS = {"lint", "test", "min_passed", "wait_seconds", "timeout_hint_seconds"}
-_AGENT_KEYS = {"launch", "status", "running_pattern", "poll_seconds", "max_sessions"}
+_AGENT_KEYS = {"launch", "status", "running_pattern", "poll_seconds", "max_sessions", "launch_grace_polls"}
 
 
 def load_config(run_dir: Path) -> RunConfig:
@@ -80,6 +81,7 @@ def load_config(run_dir: Path) -> RunConfig:
     running_pattern = _str(agent, "agent", "running_pattern", "running")
     poll_seconds = _int(agent, "agent", "poll_seconds", 30)
     max_sessions = _int(agent, "agent", "max_sessions", 20)
+    launch_grace_polls = _int(agent, "agent", "launch_grace_polls", 4)
 
     return RunConfig(
         name=name,
@@ -96,6 +98,7 @@ def load_config(run_dir: Path) -> RunConfig:
         running_pattern=running_pattern,
         poll_seconds=poll_seconds,
         max_sessions=max_sessions,
+        launch_grace_polls=launch_grace_polls,
     )
 
 

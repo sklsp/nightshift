@@ -14,7 +14,7 @@ def supervise(config: RunConfig, run_dir: Path, *, sleep=time.sleep, now=time.ti
     total = len(load_items(run_dir))
     progress_path = config.repo / f"PROGRESS-{config.name}.md"
     message = (
-        f"Read {(run_dir / '00-start.md').as_posix()} and follow it. "
+        f"Read {(run_dir.resolve() / '00-start.md').as_posix()} and follow it. "
         f"Resume at the first item that is not ticked. "
         f"Do NOT call attempt_completion until item {total} is done."
     )
@@ -35,6 +35,13 @@ def supervise(config: RunConfig, run_dir: Path, *, sleep=time.sleep, now=time.ti
     for session in range(1, config.max_sessions + 1):
         if not _status():
             agent.launch(config, message)
+            started = False
+            for _poll in range(config.launch_grace_polls):
+                if _status():
+                    started = True
+                    break
+            if not started:
+                log("agent did not start")
         while True:
             if not _status():
                 break

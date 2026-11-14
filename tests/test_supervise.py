@@ -57,7 +57,7 @@ def _setup(tmp_path: Path, progress_text: str, max_sessions: int) -> tuple[RunCo
 def _expected_message(run_dir: Path) -> str:
     """The exact launch message for a two item run."""
     return (
-        f"Read {run_dir.as_posix()}/00-start.md and follow it. "
+        f"Read {run_dir.resolve().as_posix()}/00-start.md and follow it. "
         "Resume at the first item that is not ticked. "
         "Do NOT call attempt_completion until item 2 is done."
     )
@@ -161,3 +161,39 @@ def test_supervise_never_polls_faster_than_poll_seconds(tmp_path: Path, monkeypa
     assert code == 1
     gaps = [b - a for a, b in zip(times, times[1:], strict=False)]
     assert all(gap >= config.poll_seconds - 1e-9 for gap in gaps)
+
+
+def test_grace_period_waits_for_agent_to_start(tmp_path: Path, monkeypatch) -> None:
+    config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5)
+    clock = Clock()
+    calls = {"n": 0}
+
+    def fake_is_running(cfg: RunConfig) -> bool:
+        calls["n"] += 1
+        if calls["n"] == 5:
+            (config.repo / "PROGRESS-sup.md").write_text(_TICKED, encoding="utf-8")
+        return calls["n"] in (4, 5)
+
+    monkeypatch.setattr(agent_module, "is_running", fake_is_running)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: None)
+
+    logs: list[str] = []
+    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+
+    assert code == 0
+    assert logs == ["session 1 ended: 2/2 done, 0 blocked"]
+
+
+def test_grace_period_logs_when_agent_never_starts(tmp_path: Path, monkeypatch) -> None:
+    config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5)
+    clock = Clock()
+
+    monkeypatch.setattr(agent_module, "is_running", lambda cfg: False)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: None)
+
+    logs: list[str] = []
+    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+
+    assert code == 1
+    assert logs.count("agent did not start") == 3
+    assert logs[-1] == "agent stuck: no new item done three times in a row; a human should look"
