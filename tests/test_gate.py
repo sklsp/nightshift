@@ -1,12 +1,15 @@
 """Tests for starting and waiting on the test gate."""
 
+import os
 import sys
+import time
 from pathlib import Path
 
 import pytest
 
+from nightshift.cli import main
 from nightshift.config import RunConfig
-from nightshift.gate import file, parse_summary, start, wait
+from nightshift.gate import clean, file, parse_summary, start, wait
 
 PASS_CMD = [sys.executable, "-c", "print('3 passed in 0.01s')"]
 FAIL_CMD = [sys.executable, "-c", "print('1 failed, 2 passed in 0.01s'); raise SystemExit(1)"]
@@ -236,3 +239,74 @@ def test_file_start_then_wait_reports_fully_covered(tmp_path: Path, capsys: pyte
     assert "3 passed in 0.01s" in out
     assert "src/nightshift/gate 100% (fully covered)" in out
     assert "GATE PASS" in out
+
+
+def _stale_log(run_dir: Path) -> None:
+    """Create a .gate/log whose mtime is older than the fresh window, with no done file."""
+    gate_dir = run_dir / ".gate"
+    gate_dir.mkdir()
+    log_path = gate_dir / "log"
+    log_path.write_text("old output\n", encoding="utf-8")
+    old = time.time() - 300
+    os.utime(log_path, (old, old))
+
+
+def test_clean_removes_gate_folder(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    run_dir = _run_dir(tmp_path)
+    gate_dir = run_dir / ".gate"
+    gate_dir.mkdir()
+    (gate_dir / "log").write_text("tick\n", encoding="utf-8")
+    (gate_dir / "mode").write_text("start\npytest -q", encoding="utf-8")
+
+    assert clean(run_dir) == 0
+    out = capsys.readouterr().out
+    assert not gate_dir.exists()
+    assert "log" in out
+    assert "mode" in out
+
+
+def test_clean_without_gate_folder_is_a_noop(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    run_dir = _run_dir(tmp_path)
+
+    assert clean(run_dir) == 0
+    out = capsys.readouterr().out
+    assert "nothing to remove" in out
+
+
+def test_clean_via_cli_removes_gate_folder(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    run_dir = _run_dir(tmp_path)
+    gate_dir = run_dir / ".gate"
+    gate_dir.mkdir()
+    (gate_dir / "log").write_text("tick\n", encoding="utf-8")
+
+    assert main(["gate", "clean", str(run_dir)]) == 0
+    out = capsys.readouterr().out
+    assert not gate_dir.exists()
+    assert "log" in out
+
+
+def test_stale_log_makes_start_launch_again(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    config = _config(tmp_path)
+    run_dir = _run_dir(tmp_path)
+    _stale_log(run_dir)
+
+    assert start(config, run_dir) == 0
+    out = capsys.readouterr().out
+    assert "previous gate run looks stale; starting a new one" in out
+    assert "GATE STARTED" in out
+    # The relaunch wrote a fresh mode file and the detached run finishes on its own.
+    assert (run_dir / ".gate" / "mode").is_file()
+
+    assert wait(config, run_dir, 1) == 0
+    out = capsys.readouterr().out
+    assert "GATE PASS" in out
+
+
+def test_stale_log_makes_wait_report_gate_stale(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    config = _config(tmp_path)
+    run_dir = _run_dir(tmp_path)
+    _stale_log(run_dir)
+
+    assert wait(config, run_dir, 1) == 1
+    out = capsys.readouterr().out
+    assert f"GATE STALE: run nightshift gate start {run_dir} again" in out

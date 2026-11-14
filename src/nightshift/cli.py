@@ -12,7 +12,7 @@ from tempfile import TemporaryDirectory
 from nightshift import __version__
 from nightshift.agent import AgentError
 from nightshift.config import ConfigError, RunConfig, load_config
-from nightshift.gate import file, parse_summary, start, wait
+from nightshift.gate import clean, file, parse_summary, start, wait
 from nightshift.items import ItemsError, load_items
 from nightshift.progress import read_progress
 from nightshift.render import RenderError, render_run
@@ -93,6 +93,10 @@ def build_parser() -> argparse.ArgumentParser:
     gate_file.add_argument("run_dir", type=Path, help="path of an existing run directory")
     gate_file.add_argument("test_file", help="path to the test file, relative to the repo root")
     gate_file.add_argument("module", help="module name used for the coverage report line")
+    gate_clean = gate_sub.add_parser(
+        "clean", help="delete <run dir>/.gate/ and print what it removed"
+    )
+    gate_clean.add_argument("run_dir", type=Path, help="path of an existing run directory")
 
     return parser
 
@@ -242,6 +246,8 @@ def _programs_to_check(config: RunConfig) -> list[str]:
 
 def _gate(args: argparse.Namespace) -> int:
     """Run one gate subcommand against an existing run directory."""
+    if args.gate_command == "clean":
+        return clean(args.run_dir)
     try:
         config = load_config(args.run_dir)
     except ConfigError as exc:

@@ -3,6 +3,7 @@
 import argparse
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -60,6 +61,8 @@ def _preflight(config: RunConfig, run_dir: Path) -> int | None:
     if _run_is_going(run_dir):
         print(f"GATE ALREADY RUNNING; now run: nightshift gate wait {run_dir} 1")
         return 0
+    if _is_stale(run_dir):
+        print("previous gate run looks stale; starting a new one")
 
     for lint_command in [config.lint] if config.lint else []:  # lint is ONE command (fixed by Claude)
         with tempfile.TemporaryFile("w+b") as lint_log:
@@ -135,6 +138,19 @@ def file(config: RunConfig, run_dir: Path, test_file: str, module: str) -> int:
     return _launch(config, run_dir, command, f"file {module}")
 
 
+def clean(run_dir: Path) -> int:
+    """Delete <run dir>/.gate/ and print what it removed."""
+    gate_dir = _gate_dir(run_dir)
+    if not gate_dir.is_dir():
+        print(f"nothing to remove: {gate_dir} does not exist")
+        return 0
+    for path in sorted(gate_dir.iterdir()):
+        print(f"removed {path}")
+    shutil.rmtree(gate_dir)
+    print(f"removed {gate_dir}")
+    return 0
+
+
 def _run_is_going(run_dir: Path) -> bool:
     """True when a previous start is still fresh enough to count as running."""
     log_path = _log_path(run_dir)
@@ -144,9 +160,21 @@ def _run_is_going(run_dir: Path) -> bool:
     return age < _FRESH_SECONDS
 
 
+def _is_stale(run_dir: Path) -> bool:
+    """True when the log is older than _FRESH_SECONDS with no done file (the detached process died)."""
+    log_path = _log_path(run_dir)
+    if not log_path.is_file() or _done_path(run_dir).is_file():
+        return False
+    age = time.time() - log_path.stat().st_mtime
+    return age >= _FRESH_SECONDS
+
+
 def wait(config: RunConfig, run_dir: Path, n: int) -> int:
     """Wait for the gated test run to finish and report its result."""
     done_path = _done_path(run_dir)
+    if not done_path.is_file() and _is_stale(run_dir):
+        print(f"GATE STALE: run nightshift gate start {run_dir} again")
+        return 1
     deadline = time.monotonic() + config.wait_seconds
     while not done_path.is_file():
         if time.monotonic() >= deadline:
