@@ -56,7 +56,86 @@ def test_doctor_healthy_run_is_all_ok(tmp_path: Path, capsys: pytest.CaptureFixt
 
     lines = capsys.readouterr().out.splitlines()
     assert code == 0
-    assert lines == ["ok"] * 5
+    assert lines == [
+        "ok: run.toml",
+        "ok: items.md",
+        "ok: repo",
+        "ok: test command",
+        "ok: timing",
+    ]
+
+
+def test_doctor_full_config_names_every_check(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    run_dir = _healthy_run(tmp_path)
+    exe = Path(sys.executable).as_posix()
+    _rewrite_toml(run_dir, "wait_seconds = 25", f"lint = [{exe!r}]\nwait_seconds = 25")
+    _rewrite_toml(
+        run_dir,
+        "timeout_hint_seconds = 30\n",
+        f"timeout_hint_seconds = 30\n[agent]\nlaunch = [{exe!r}]\nstatus = [{exe!r}]\n",
+    )
+
+    code = main(["doctor", str(run_dir)])
+
+    lines = capsys.readouterr().out.splitlines()
+    assert code == 0
+    assert lines == [
+        "ok: run.toml",
+        "ok: items.md",
+        "ok: repo",
+        "ok: test command",
+        "ok: lint command",
+        "ok: agent launch",
+        "ok: agent status",
+        "ok: timing",
+    ]
+
+
+def test_doctor_broken_run_toml_reports_named_problem(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    run_dir = _healthy_run(tmp_path)
+    _rewrite_toml(run_dir, 'name = "doc"\n', "")
+
+    code = main(["doctor", str(run_dir)])
+
+    lines = capsys.readouterr().out.splitlines()
+    assert code == 1
+    assert lines == ["problem: run.toml: missing required key 'run.name'"]
+
+
+def test_doctor_broken_items_md_reports_named_problem(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    run_dir = _healthy_run(tmp_path)
+    (run_dir / "items.md").write_text("# Items\nNo headers here.\n", encoding="utf-8")
+
+    code = main(["doctor", str(run_dir)])
+
+    lines = capsys.readouterr().out.splitlines()
+    assert code == 1
+    assert lines == [
+        "ok: run.toml",
+        "problem: items.md: no items found",
+        "ok: repo",
+        "ok: test command",
+        "ok: timing",
+    ]
+
+
+def test_doctor_missing_lint_program_reports_problem(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    run_dir = _healthy_run(tmp_path)
+    _rewrite_toml(run_dir, "wait_seconds = 25", 'lint = ["no-such-linter-xyz"]\nwait_seconds = 25')
+
+    code = main(["doctor", str(run_dir)])
+
+    lines = capsys.readouterr().out.splitlines()
+    assert code == 1
+    assert "problem: lint command: install no-such-linter-xyz or put it on PATH" in lines
 
 
 def test_doctor_missing_test_program_reports_problem(
@@ -69,7 +148,26 @@ def test_doctor_missing_test_program_reports_problem(
 
     lines = capsys.readouterr().out.splitlines()
     assert code == 1
-    assert any(line.startswith("problem:") and "no-such-program-xyz" in line for line in lines)
+    assert "problem: test command: install no-such-program-xyz or put it on PATH" in lines
+
+
+def test_doctor_missing_agent_programs_report_problems(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    run_dir = _healthy_run(tmp_path)
+    _rewrite_toml(
+        run_dir,
+        "timeout_hint_seconds = 30\n",
+        'timeout_hint_seconds = 30\n[agent]\n'
+        'launch = ["no-such-launch-xyz"]\nstatus = ["no-such-status-xyz"]\n',
+    )
+
+    code = main(["doctor", str(run_dir)])
+
+    lines = capsys.readouterr().out.splitlines()
+    assert code == 1
+    assert "problem: agent launch: install no-such-launch-xyz or put it on PATH" in lines
+    assert "problem: agent status: install no-such-status-xyz or put it on PATH" in lines
 
 
 def test_doctor_wait_seconds_not_below_timeout_hint(
@@ -82,5 +180,5 @@ def test_doctor_wait_seconds_not_below_timeout_hint(
 
     lines = capsys.readouterr().out.splitlines()
     assert code == 1
-    assert any(line.startswith("problem:") and "wait_seconds" in line for line in lines)
+    assert "problem: timing: lower check.wait_seconds below check.timeout_hint_seconds" in lines
 

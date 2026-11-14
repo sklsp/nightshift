@@ -6,7 +6,6 @@ import re
 import shutil
 import subprocess
 import sys
-from collections.abc import Callable
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -170,20 +169,20 @@ def _doctor(run_dir: Path) -> int:
     """Check that the run dir is ready for an unattended run; exit 1 on any problem."""
     problems = 0
 
-    def report(ok: bool, problem: str = "") -> None:
+    def report(check: str, ok: bool, problem: str = "") -> None:
         nonlocal problems
         if ok:
-            print("ok")
+            print(f"ok: {check}")
         else:
             problems += 1
-            print(f"problem: {problem}")
+            print(f"problem: {check}: {problem}")
 
     config: RunConfig | None = None
     try:
         config = load_config(run_dir)
-        report(True)
+        report("run.toml", True)
     except ConfigError as exc:
-        report(False, f"fix run.toml ({exc})")
+        report("run.toml", False, str(exc))
     if config is None:
         return 1
 
@@ -191,31 +190,35 @@ def _doctor(run_dir: Path) -> int:
         items = load_items(run_dir)
         with TemporaryDirectory() as tmp:
             render_run(config, items, Path(tmp))
-        report(True)
+        report("items.md", True)
     except (ItemsError, RenderError) as exc:
-        report(False, f"fix items.md ({exc})")
+        report("items.md", False, str(exc))
 
-    _check_repo(report, config.repo)
+    repo_result = _repo_check(config.repo)
+    if repo_result is None:
+        print("note: skipped the git work tree check because git is not on PATH")
+    else:
+        ok, problem = repo_result
+        report("repo", ok, problem)
 
-    for program in _programs_to_check(config):
+    for check, program in _program_checks(config):
         if shutil.which(program) is not None or Path(program).is_file():
-            report(True)
+            report(check, True)
         else:
-            report(False, f"install {program} or put it on PATH")
+            report(check, False, f"install {program} or put it on PATH")
 
     if config.wait_seconds < config.timeout_hint_seconds:
-        report(True)
+        report("timing", True)
     else:
-        report(False, "lower check.wait_seconds below check.timeout_hint_seconds")
+        report("timing", False, "lower check.wait_seconds below check.timeout_hint_seconds")
 
     return 0 if problems == 0 else 1
 
 
-def _check_repo(report: Callable[[bool, str], None], repo: Path) -> None:
-    """Report whether repo exists and is a git work tree; skip with a note when git is missing."""
+def _repo_check(repo: Path) -> tuple[bool, str] | None:
+    """Check that repo exists and is a git work tree; return (ok, problem), or None when git is missing."""
     if not repo.is_dir():
-        report(False, f"create the repo folder {repo}")
-        return
+        return False, f"create the repo folder {repo}"
     try:
         result = subprocess.run(
             ["git", "-C", str(repo), "rev-parse", "--is-inside-work-tree"],
@@ -224,26 +227,24 @@ def _check_repo(report: Callable[[bool, str], None], repo: Path) -> None:
             stdin=subprocess.DEVNULL,
         )
     except FileNotFoundError:
-        print("note: skipped the git work tree check because git is not on PATH")
-        return
+        return None
     if result.returncode == 0 and result.stdout.strip() == "true":
-        report(True)
-    else:
-        report(False, f"run git init in {repo}")
+        return True, ""
+    return False, f"run git init in {repo}"
 
 
-def _programs_to_check(config: RunConfig) -> list[str]:
-    """Program words doctor must find: test first word, lint word 0, launch and status programs."""
-    programs: list[str] = []
+def _program_checks(config: RunConfig) -> list[tuple[str, str]]:
+    """Pairs of (check name, program word) doctor must find on PATH."""
+    checks: list[tuple[str, str]] = []
     if config.test:
-        programs.append(config.test[0])
+        checks.append(("test command", config.test[0]))
     if config.lint:
-        programs.append(config.lint[0])
+        checks.append(("lint command", config.lint[0]))
     if config.launch:
-        programs.append(config.launch[0])
+        checks.append(("agent launch", config.launch[0]))
     if config.status:
-        programs.append(config.status[0])
-    return programs
+        checks.append(("agent status", config.status[0]))
+    return checks
 
 
 def _gate(args: argparse.Namespace) -> int:
