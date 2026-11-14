@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0
+
+- cli: doctor names every check it runs and prints one ok or problem line per check
+- cli: new report command that prints a markdown summary of a run for a pull request body, with the commit hash behind each item, the last gate line and --out to write to a file
+- report: appends ## Bugs found and ## Ideas sections from BUGS.md and IDEAS.md in the run dir when they hold lines
+- release: version 0.3.0 and this changelog
+
 ## 0.2.0
 
 - render: spec files reference the run dir and repo with absolute paths

@@ -33,6 +33,7 @@ Python 3.11 or newer; no other dependencies. This puts `nightshift` on your PATH
    nightshift supervise myrun
    nightshift status myrun
    nightshift status myrun --json   # the same summary as one JSON object
+   nightshift report myrun          # markdown summary of a finished run for a pull request body
    ```
 
 ## The gate
