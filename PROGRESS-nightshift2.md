@@ -7,4 +7,4 @@
 - [x] M5. cli: doctor (101 passed in 2.76s)
 - [x] M6. gate: clean and stale runs (106 passed in 2.99s)
 - [x] M7. cli: status --json (108 passed in 3.25s)
-- [ ] M8. release: version 0.2.0 and changelog
+- [x] M8. release: version 0.2.0 and changelog (108 passed in 3.23s)

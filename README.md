@@ -29,8 +29,10 @@ Python 3.11 or newer; no other dependencies. This puts `nightshift` on your PATH
 4. Point your agent at `myrun/00-start.md` and let it work, or drive it yourself with the supervisor:
 
    ```
+   nightshift doctor myrun          # check config, items, repo and test program before starting
    nightshift supervise myrun
    nightshift status myrun
+   nightshift status myrun --json   # the same summary as one JSON object
    ```
 
 ## The gate
@@ -42,9 +44,10 @@ nightshift gate start myrun          # run lint, then the test command, detached
 nightshift gate wait myrun 1         # poll for the result (use a new number every time)
 nightshift gate wait myrun 2
 nightshift gate file myrun tests/test_gate.py nightshift.gate   # one test file with coverage of one module
+nightshift gate clean myrun          # remove .gate state when nothing is running
 ```
 
-`wait` prints the pytest summary line and says GATE PASS or GATE FAIL. The log lives in `myrun/.gate/log`; a new start refuses to double start while the previous run is still going.
+`wait` prints the pytest summary line and says GATE PASS or GATE FAIL. The log lives in `myrun/.gate/log`; a new start refuses to double start while the previous run is still going. A run whose log is older than two minutes without a result is treated as stale: start relaunches instead of refusing, and wait reports GATE STALE instead of polling forever.
 
 ## Run folder layout
 
