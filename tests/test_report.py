@@ -152,3 +152,49 @@ def test_report_includes_last_gate_line(
         "- T1 first item: not committed\n"
         "last gate: exit 0: 3 passed in 0.12s\n"
     )
+
+
+def test_report_appends_bugs_and_ideas_sections(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo, run_dir = _run_dir(
+        tmp_path,
+        "# Items for the rep run\n\n## first item\nDo it.\n",
+        "- [x] T1. first item\n",
+    )
+    (run_dir / "BUGS.md").write_text("# Bugs\n\ncrash on empty input\nslow gate wait\n", encoding="utf-8")
+    (run_dir / "IDEAS.md").write_text("# Ideas\nAdd a watch mode.\n", encoding="utf-8")
+
+    code = main(["report", str(run_dir)])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert out == (
+        "# rep: 1/1 items\n"
+        "- T1 first item: not committed\n"
+        "\n"
+        "## Bugs found\n"
+        "crash on empty input\n"
+        "slow gate wait\n"
+        "\n"
+        "## Ideas\n"
+        "Add a watch mode.\n"
+    )
+
+
+def test_report_empty_notes_files_give_no_sections(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo, run_dir = _run_dir(
+        tmp_path,
+        "# Items for the rep run\n\n## first item\nDo it.\n",
+        "- [x] T1. first item\n",
+    )
+    (run_dir / "BUGS.md").write_text("", encoding="utf-8")
+    (run_dir / "IDEAS.md").write_text("# Ideas\n\n", encoding="utf-8")
+
+    code = main(["report", str(run_dir)])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert out == "# rep: 1/1 items\n- T1 first item: not committed\n"

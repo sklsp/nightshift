@@ -30,7 +30,34 @@ def build_report(run_dir: Path) -> str:
     gate_line = last_gate_line(run_dir)
     if gate_line != "last gate: none":
         lines.append(gate_line)
+    _append_section(lines, run_dir / "BUGS.md", "Bugs found")
+    _append_section(lines, run_dir / "IDEAS.md", "Ideas")
     return "\n".join(lines) + "\n"
+
+
+def _note_lines(path: Path) -> list[str]:
+    """Content lines of one notes file: blank lines and a first '# ' heading dropped."""
+    if not path.is_file():
+        return []
+    kept: list[str] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if not kept and stripped.startswith("# "):
+            continue
+        kept.append(line)
+    return kept
+
+
+def _append_section(lines: list[str], path: Path, title: str) -> None:
+    """Append '## <title>' plus the content lines of one notes file, when it has any."""
+    note_lines = _note_lines(path)
+    if not note_lines:
+        return
+    lines.append("")
+    lines.append(f"## {title}")
+    lines.extend(note_lines)
 
 
 def _commit_lines(repo: Path) -> list[tuple[str, str]]:
