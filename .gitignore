@@ -7,3 +7,4 @@ examples/*/00-start.md
 item-*.md
 checklist.txt
 .gate/
+.coverage
