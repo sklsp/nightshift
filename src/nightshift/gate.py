@@ -163,6 +163,21 @@ def state(run_dir: Path) -> str:
     return "pass" if code_text == "0" else "fail"
 
 
+def last_gate_line(run_dir: Path) -> str:
+    """One line describing the last gated test run, or 'last gate: none' when there is no log."""
+    log_path = _log_path(run_dir)
+    if not log_path.is_file():
+        return "last gate: none"
+    done_path = _done_path(run_dir)
+    if not done_path.is_file():
+        return "last gate: running"
+    code_text = done_path.read_text(encoding="utf-8", errors="replace").strip() or "?"
+    summary = parse_summary(_log_text(run_dir))
+    if summary.line is None:
+        return f"last gate: exit {code_text} (no pytest summary line)"
+    return f"last gate: exit {code_text}: {summary.line}"
+
+
 def _run_is_going(run_dir: Path) -> bool:
     """True when a previous start is still fresh enough to count as running."""
     log_path = _log_path(run_dir)

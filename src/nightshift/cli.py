@@ -12,10 +12,11 @@ from tempfile import TemporaryDirectory
 from nightshift import __version__
 from nightshift.agent import AgentError
 from nightshift.config import ConfigError, RunConfig, load_config
-from nightshift.gate import clean, file, parse_summary, start, state, wait
+from nightshift.gate import clean, file, last_gate_line, start, state, wait
 from nightshift.items import ItemsError, load_items
 from nightshift.progress import Progress, read_progress
 from nightshift.render import RenderError, render_run
+from nightshift.report import build_report
 from nightshift.supervise import supervise
 
 _EXAMPLE_RUN_TOML = """\
@@ -83,6 +84,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     doctor_parser.add_argument("run_dir", type=Path, help="path of an existing run directory")
 
+    report_parser = subparsers.add_parser(
+        "report", help="print a markdown summary of the run for a pull request body"
+    )
+    report_parser.add_argument("run_dir", type=Path, help="path of an existing run directory")
+    report_parser.add_argument(
+        "--out", type=Path, default=None, help="write the summary to this file instead of stdout"
+    )
+
     gate_parser = subparsers.add_parser("gate", help="run a check behind the detached gate")
     gate_sub = gate_parser.add_subparsers(dest="gate_command", required=True)
     gate_start = gate_sub.add_parser("start", help="run lint, then start the test command detached")
@@ -116,6 +125,8 @@ def main(argv: list[str] | None = None) -> int:
         return _status(args.run_dir, as_json=args.json)
     if args.command == "doctor":
         return _doctor(args.run_dir)
+    if args.command == "report":
+        return _report(args.run_dir, out=args.out)
     if args.command == "gate":
         return _gate(args)
     parser.print_help()
@@ -247,6 +258,24 @@ def _program_checks(config: RunConfig) -> list[tuple[str, str]]:
     return checks
 
 
+def _report(run_dir: Path, out: Path | None = None) -> int:
+    """Print the markdown summary of a run, or write it to out when given."""
+    try:
+        text = build_report(run_dir)
+    except (ConfigError, ItemsError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    if out is not None:
+        try:
+            out.write_text(text, encoding="utf-8", newline="\n")
+        except OSError as exc:
+            print(f"error: could not write {out}: {exc}", file=sys.stderr)
+            return 1
+        return 0
+    sys.stdout.write(text)
+    return 0
+
+
 def _gate(args: argparse.Namespace) -> int:
     """Run one gate subcommand against an existing run directory."""
     if args.gate_command == "clean":
@@ -291,7 +320,7 @@ def _status(run_dir: Path, as_json: bool = False) -> int:
         suffix = f" {title}" if title else ""
         print(f"next: {config.prefix}{progress.next_item}{suffix}")
 
-    print(_last_gate_line(run_dir))
+    print(last_gate_line(run_dir))
     _print_commits(config.repo)
     return 0
 
@@ -325,21 +354,6 @@ def _status_payload(
         "gate": state(run_dir),
         "commits": _commit_dicts(config.repo) or [],
     }
-
-
-def _last_gate_line(run_dir: Path) -> str:
-    """One line describing the last gated test run, if any."""
-    log_path = run_dir / ".gate" / "log"
-    done_path = run_dir / ".gate" / "done"
-    if not log_path.is_file():
-        return "last gate: none"
-    if not done_path.is_file():
-        return "last gate: running"
-    code_text = done_path.read_text(encoding="utf-8", errors="replace").strip() or "?"
-    summary = parse_summary(log_path.read_text(encoding="utf-8", errors="replace"))
-    if summary.line is None:
-        return f"last gate: exit {code_text} (no pytest summary line)"
-    return f"last gate: exit {code_text}: {summary.line}"
 
 
 def _commit_dicts(repo: Path) -> list[dict[str, str]] | None:
