@@ -61,6 +61,7 @@ def _start_text(config: RunConfig, total: int, run_dir: Path) -> str:
         progress_file=_progress_path(config).as_posix(),
         check_command=_check_command(config),
         command=command_prefix(config),
+        run_dir=run_dir.resolve().as_posix(),
     )
 
 
@@ -84,6 +85,7 @@ def _item_text(config: RunConfig, item: Item, total: int, run_dir: Path) -> str:
         progress_file=_progress_path(config).as_posix(),
         command=command_prefix(config),
         ending=ending,
+        run_dir=run_dir.resolve().as_posix(),
     )
 
 

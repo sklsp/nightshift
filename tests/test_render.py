@@ -48,11 +48,12 @@ def test_custom_command_renders_prefix_in_start_file(tmp_path: Path) -> None:
     )
     out = tmp_path / "out"
     render_run(config, _items(), out)
+    run_dir = out.resolve().as_posix()
     text = (out / "00-start.md").read_text(encoding="utf-8")
-    assert "python -m nightshift gate start <run dir>" in text
-    assert "python -m nightshift gate wait <run dir> 1" in text
-    assert "python -m nightshift gate file <run dir> <test file> <module>" in text
-    assert "python -m nightshift status <run dir>" in text
+    assert f"python -m nightshift gate start {run_dir}" in text
+    assert f"python -m nightshift gate wait {run_dir} 1" in text
+    assert f"python -m nightshift gate file {run_dir} <test file> <module>" in text
+    assert f"python -m nightshift status {run_dir}" in text
 
 
 def test_custom_command_renders_prefix_in_item_files(tmp_path: Path) -> None:
@@ -61,11 +62,12 @@ def test_custom_command_renders_prefix_in_item_files(tmp_path: Path) -> None:
     )
     out = tmp_path / "out"
     written = render_run(config, _items(), out)
+    run_dir = out.resolve().as_posix()
     for path in written:
         if path.name.startswith("item-"):
             text = path.read_text(encoding="utf-8")
-            assert "python -m nightshift gate start <run dir>" in text
-            assert "python -m nightshift gate wait <run dir> 1" in text
+            assert f"python -m nightshift gate start {run_dir}" in text
+            assert f"python -m nightshift gate wait {run_dir} 1" in text
 
 
 def test_command_part_with_space_is_quoted_in_rendered_files(tmp_path: Path) -> None:
@@ -77,10 +79,29 @@ def test_command_part_with_space_is_quoted_in_rendered_files(tmp_path: Path) -> 
     )
     out = tmp_path / "out"
     written = render_run(config, _items(), out)
+    run_dir = out.resolve().as_posix()
     for path in written:
         if path.name == "00-start.md" or path.name.startswith("item-"):
             text = path.read_text(encoding="utf-8")
-            assert '"C:/Program Files/nightshift/python.exe" -m nightshift gate start <run dir>' in text
+            assert f'"C:/Program Files/nightshift/python.exe" -m nightshift gate start {run_dir}' in text
+
+
+def test_no_rendered_file_contains_run_dir_placeholder(tmp_path: Path) -> None:
+    out = tmp_path / "out"
+    written = render_run(_config(tmp_path), _items(), out)
+    for path in written:
+        assert "<run dir>" not in path.read_text(encoding="utf-8")
+
+
+def test_start_file_gate_commands_use_absolute_posix_run_dir(tmp_path: Path) -> None:
+    out = tmp_path / "out"
+    render_run(_config(tmp_path), _items(), out)
+    run_dir = out.resolve().as_posix()
+    text = (out / "00-start.md").read_text(encoding="utf-8")
+    assert f"nightshift gate start {run_dir}" in text
+    assert f"nightshift gate wait {run_dir} 1" in text
+    assert f"nightshift gate wait {run_dir} 2" in text
+    assert f"nightshift status {run_dir}" in text
 
 
 def test_item_file_has_number_title_body_and_next_pointer(tmp_path: Path) -> None:
@@ -105,12 +126,13 @@ def test_last_item_does_not_point_to_next(tmp_path: Path) -> None:
 def test_start_file_has_run_name_check_and_gate(tmp_path: Path) -> None:
     out = tmp_path / "out"
     render_run(_config(tmp_path), _items(), out)
+    run_dir = out.resolve().as_posix()
     text = (out / "00-start.md").read_text(encoding="utf-8")
     assert "nightshift run demo:" in text
     assert "ruff check ; pytest -q" in text
-    assert "nightshift gate start <run dir>" in text
-    assert "nightshift gate wait <run dir> 1" in text
-    assert "nightshift gate wait <run dir> 2" in text
+    assert f"nightshift gate start {run_dir}" in text
+    assert f"nightshift gate wait {run_dir} 1" in text
+    assert f"nightshift gate wait {run_dir} 2" in text
 
 
 def test_no_lint_renders_test_command_only(tmp_path: Path) -> None:
