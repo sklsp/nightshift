@@ -32,6 +32,7 @@ repo = ".."           # path to the repo root, relative to this run dir or absol
 [check]
 test = ["pytest", "-q"]  # test command run from the repo root
 # lint = []               # optional lint command before the tests, e.g. ["ruff", "check"]
+# pre = []                # optional commands run after lint and before the tests (list of lists)
 # min_passed = 1          # minimum passed tests for a green gate
 # wait_seconds = 25       # how long one gate wait call may block
 # timeout_hint_seconds = 30  # command limit the agent works under
@@ -94,7 +95,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     gate_parser = subparsers.add_parser("gate", help="run a check behind the detached gate")
     gate_sub = gate_parser.add_subparsers(dest="gate_command", required=True)
-    gate_start = gate_sub.add_parser("start", help="run lint, then start the test command detached")
+    gate_start = gate_sub.add_parser("start", help="run lint and pre checks, then start the test command detached")
     gate_start.add_argument("run_dir", type=Path, help="path of an existing run directory")
     gate_wait = gate_sub.add_parser("wait", help="wait for the gated run and report pass or fail")
     gate_wait.add_argument("run_dir", type=Path, help="path of an existing run directory")
@@ -251,6 +252,9 @@ def _program_checks(config: RunConfig) -> list[tuple[str, str]]:
         checks.append(("test command", config.test[0]))
     if config.lint:
         checks.append(("lint command", config.lint[0]))
+    for index, command in enumerate(config.pre):
+        if command:
+            checks.append((f"pre check {index + 1}", command[0]))
     if config.launch:
         checks.append(("agent launch", config.launch[0]))
     if config.status:

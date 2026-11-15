@@ -20,6 +20,7 @@ class RunConfig:
     branch: str = "main"
     prefix: str = "T"
     lint: list[str] = field(default_factory=list)
+    pre: list[list[str]] = field(default_factory=list)
     min_passed: int = 1
     wait_seconds: int = 25
     timeout_hint_seconds: int = 30
@@ -34,7 +35,7 @@ class RunConfig:
 _SECTIONS = ("run", "check", "agent")
 
 _RUN_KEYS = {"name", "repo", "branch", "prefix"}
-_CHECK_KEYS = {"lint", "test", "min_passed", "wait_seconds", "timeout_hint_seconds"}
+_CHECK_KEYS = {"lint", "pre", "test", "min_passed", "wait_seconds", "timeout_hint_seconds"}
 _AGENT_KEYS = {"launch", "status", "running_pattern", "poll_seconds", "max_sessions", "launch_grace_polls"}
 
 
@@ -71,6 +72,7 @@ def load_config(run_dir: Path) -> RunConfig:
         raise ConfigError("invalid value for 'run.prefix': 1 to 3 capital letters")
 
     lint = _str_list(check, "check", "lint", [])
+    pre = _str_list_of_lists(check, "check", "pre", [])
     test = _required_str_list(check, "check", "test")
     min_passed = _int(check, "check", "min_passed", 1)
     wait_seconds = _int(check, "check", "wait_seconds", 25)
@@ -90,6 +92,7 @@ def load_config(run_dir: Path) -> RunConfig:
         branch=branch,
         prefix=prefix,
         lint=lint,
+        pre=pre,
         min_passed=min_passed,
         wait_seconds=wait_seconds,
         timeout_hint_seconds=timeout_hint_seconds,
@@ -143,6 +146,21 @@ def _str_list(table: dict[str, object], where: str, key: str, default: list[str]
     if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
         raise ConfigError(f"wrong type for '{where}.{key}': expected a list of str")
     return list(value)
+
+
+def _str_list_of_lists(
+    table: dict[str, object], where: str, key: str, default: list[list[str]]
+) -> list[list[str]]:
+    """Return a list of commands (each a list of strings) or its default when the key is absent."""
+    if key not in table:
+        return default
+    value = table[key]
+    if not isinstance(value, list):
+        raise ConfigError(f"wrong type for '{where}.{key}': expected a list of commands")
+    for index, item in enumerate(value):
+        if not isinstance(item, list) or not all(isinstance(part, str) for part in item):
+            raise ConfigError(f"wrong type for '{where}.{key}[{index}]': expected a list of str")
+    return [list(item) for item in value]
 
 
 def _required_str(table: dict[str, object], where: str, key: str) -> str:

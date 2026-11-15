@@ -16,7 +16,7 @@ FAIL_CMD = [sys.executable, "-c", "print('1 failed, 2 passed in 0.01s'); raise S
 LINT_FAIL_CMD = [sys.executable, "-c", "print('lint problem here'); raise SystemExit(3)"]
 
 
-def _config(tmp_path: Path, test=PASS_CMD, lint=None) -> RunConfig:
+def _config(tmp_path: Path, test=PASS_CMD, lint=None, pre=None) -> RunConfig:
     """Build a config whose repo and commands live under tmp_path."""
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -25,9 +25,15 @@ def _config(tmp_path: Path, test=PASS_CMD, lint=None) -> RunConfig:
         repo=repo,
         test=list(test),
         lint=list(lint or []),
+        pre=[list(command) for command in (pre or [])],
         min_passed=1,
         wait_seconds=2,
     )
+
+
+def _marker(path: Path) -> list[str]:
+    """A fake passing command that writes a marker file."""
+    return [sys.executable, "-c", f"open({str(path)!r}, 'w').write('x')"]
 
 
 def _run_dir(tmp_path: Path) -> Path:
@@ -72,6 +78,49 @@ def test_lint_failure_does_not_start(tmp_path: Path, capsys: pytest.CaptureFixtu
     err = capsys.readouterr().err
     assert "lint problem here" in err
     assert "GATE NOT STARTED: lint failed" in err
+    assert not (run_dir / ".gate" / "log").exists()
+
+
+def test_two_pre_checks_pass_then_suite_starts_and_passes(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    one = tmp_path / "one.txt"
+    two = tmp_path / "two.txt"
+    config = _config(tmp_path, pre=[_marker(one), _marker(two)])
+    run_dir = _run_dir(tmp_path)
+
+    assert start(config, run_dir) == 0
+    out = capsys.readouterr().out
+    assert "GATE STARTED" in out
+    # Both pre checks ran before the suite launched.
+    assert one.is_file() and two.is_file()
+
+    assert wait(config, run_dir, 1) == 0
+    out = capsys.readouterr().out
+    assert "3 passed in 0.01s" in out
+    assert "GATE PASS" in out
+
+
+def test_second_pre_check_failure_stops_gate_with_its_name(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    one = tmp_path / "one.txt"
+    two = tmp_path / "two.txt"
+    failing = [
+        sys.executable,
+        "-c",
+        f"print('second pre check blew up'); open({str(two)!r}, 'w').write('x'); raise SystemExit(2)",
+    ]
+    config = _config(tmp_path, pre=[_marker(one), failing])
+    run_dir = _run_dir(tmp_path)
+
+    assert start(config, run_dir) == 1
+    err = capsys.readouterr().err
+    # The tail of the failed command and its name are reported.
+    assert "second pre check blew up" in err
+    assert f"GATE NOT STARTED: {sys.executable}" in err
+    # Both pre checks ran, in order; the suite never started.
+    assert one.is_file() and two.is_file()
     assert not (run_dir / ".gate" / "log").exists()
 
 

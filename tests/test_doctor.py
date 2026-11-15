@@ -138,6 +138,21 @@ def test_doctor_missing_lint_program_reports_problem(
     assert "problem: lint command: install no-such-linter-xyz or put it on PATH" in lines
 
 
+def test_doctor_pre_checks_are_named_and_checked(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    run_dir = _healthy_run(tmp_path)
+    exe = Path(sys.executable).as_posix()
+    _rewrite_toml(run_dir, "wait_seconds = 25", f"pre = [[{exe!r}], ['no-such-pre-xyz']]\nwait_seconds = 25")
+
+    code = main(["doctor", str(run_dir)])
+
+    lines = capsys.readouterr().out.splitlines()
+    assert code == 1
+    assert "ok: pre check 1" in lines
+    assert "problem: pre check 2: install no-such-pre-xyz or put it on PATH" in lines
+
+
 def test_doctor_missing_test_program_reports_problem(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

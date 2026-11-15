@@ -1,4 +1,10 @@
-"""Start a test run behind a gate and wait for its result."""
+"""Start a test run behind a gate and wait for its result.
+
+The pre checks exist because of a real failure: one run shipped 55 type errors
+because its gate ran only lint and the tests while CI also ran a strict type
+checker, so the green gate never saw them. Every command in check.pre runs
+after lint and before the suite; the first one that fails stops the start.
+"""
 
 import argparse
 import os
@@ -57,30 +63,41 @@ def _mode_path(run_dir: Path) -> Path:
 
 
 def _preflight(config: RunConfig, run_dir: Path) -> int | None:
-    """Refuse a double start and run lint first; return an exit code or None to continue."""
+    """Refuse a double start and run lint plus every pre check in order; return an exit code or None."""
     if _run_is_going(run_dir):
         print(f"GATE ALREADY RUNNING; now run: nightshift gate wait {run_dir} 1")
         return 0
     if _is_stale(run_dir):
         print("previous gate run looks stale; starting a new one")
 
-    for lint_command in [config.lint] if config.lint else []:  # lint is ONE command (fixed by Claude)
-        with tempfile.TemporaryFile("w+b") as lint_log:
+    for label, command in _preflight_commands(config):
+        with tempfile.TemporaryFile("w+b") as check_log:
             result = subprocess.run(
-                lint_command,
+                command,
                 cwd=config.repo,
-                stdout=lint_log,
+                stdout=check_log,
                 stderr=subprocess.STDOUT,
                 stdin=subprocess.DEVNULL,
             )
             if result.returncode != 0:
-                lint_log.seek(0)
-                tail = lint_log.read().decode("utf-8", "replace").splitlines()[-_TAIL_LINES:]
+                check_log.seek(0)
+                tail = check_log.read().decode("utf-8", "replace").splitlines()[-_TAIL_LINES:]
                 for line in tail:
                     print(line, file=sys.stderr)
-                print("GATE NOT STARTED: lint failed", file=sys.stderr)
+                print(f"GATE NOT STARTED: {label} failed", file=sys.stderr)
                 return 1
     return None
+
+
+def _preflight_commands(config: RunConfig) -> list[tuple[str, list[str]]]:
+    """Return (label, command) pairs for lint and every pre check, in the order they run."""
+    commands: list[tuple[str, list[str]]] = []
+    if config.lint:  # lint is ONE command (fixed by Claude)
+        commands.append(("lint", config.lint))
+    for command in config.pre:
+        if command:
+            commands.append((" ".join(command), command))
+    return commands
 
 
 def _launch(config: RunConfig, run_dir: Path, command: list[str], mode_line: str) -> int:

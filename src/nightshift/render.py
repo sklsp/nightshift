@@ -91,8 +91,8 @@ def _progress_path(config: RunConfig) -> Path:
 
 
 def _check_command(config: RunConfig) -> str:
-    """Join the lint and test commands into one check line."""
-    parts = [" ".join(config.lint)] if config.lint else []
+    """Join lint, every pre check and the test command into one check line."""
+    parts = [" ".join(command) for command in (config.lint, *config.pre) if command]
     parts.append(" ".join(config.test))
     return " ; ".join(parts)
 

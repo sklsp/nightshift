@@ -34,6 +34,7 @@ prefix = "AB"
 
 [check]
 lint = ["ruff", "check"]
+pre = [["mypy", "--strict"], ["ruff", "format", "--check"]]
 test = ["pytest", "-q"]
 min_passed = 3
 wait_seconds = 20
@@ -55,6 +56,7 @@ launch_grace_polls = 2
     assert cfg.branch == "night"
     assert cfg.prefix == "AB"
     assert cfg.lint == ["ruff", "check"]
+    assert cfg.pre == [["mypy", "--strict"], ["ruff", "format", "--check"]]
     assert cfg.test == ["pytest", "-q"]
     assert cfg.min_passed == 3
     assert cfg.wait_seconds == 20
@@ -73,6 +75,7 @@ def test_defaults_when_optional_keys_missing(tmp_path: Path) -> None:
     assert cfg.branch == "main"
     assert cfg.prefix == "T"
     assert cfg.lint == []
+    assert cfg.pre == []
     assert cfg.min_passed == 1
     assert cfg.wait_seconds == 25
     assert cfg.timeout_hint_seconds == 30
@@ -148,6 +151,33 @@ def test_bool_is_not_an_int(tmp_path: Path) -> None:
 def test_wrong_type_list_of_str(tmp_path: Path) -> None:
     _write(tmp_path, '[run]\nname = "demo"\nrepo = "."\n\n[check]\ntest = "pytest"')
     with pytest.raises(ConfigError, match="wrong type for 'check.test': expected a list of str"):
+        load_config(tmp_path)
+
+
+def test_pre_flat_list_of_strings_is_rejected(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        '[run]\nname = "demo"\nrepo = "."\n\n[check]\ntest = ["x"]\npre = ["mypy", "--strict"]',
+    )
+    with pytest.raises(ConfigError, match="wrong type for 'check.pre\\[0\\]': expected a list of str"):
+        load_config(tmp_path)
+
+
+def test_pre_entry_with_non_string_part_is_rejected(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        '[run]\nname = "demo"\nrepo = "."\n\n[check]\ntest = ["x"]\npre = [["mypy", 5]]',
+    )
+    with pytest.raises(ConfigError, match="wrong type for 'check.pre\\[0\\]': expected a list of str"):
+        load_config(tmp_path)
+
+
+def test_pre_not_a_list_is_rejected(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        '[run]\nname = "demo"\nrepo = "."\n\n[check]\ntest = ["x"]\npre = "mypy"',
+    )
+    with pytest.raises(ConfigError, match="wrong type for 'check.pre': expected a list of commands"):
         load_config(tmp_path)
 
 
