@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.0
+
+- config: [run] command names the program the rendered spec tells the agent to run; every gate hint uses the same prefix, stored in .gate/ at start so wait prints what it was started with
+- release: version 0.5.0 and this changelog
+
 ## 0.4.0
 
 - gate: [check] pre runs any number of extra commands between lint and tests; the first one that fails stops the start
