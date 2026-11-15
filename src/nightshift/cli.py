@@ -11,6 +11,7 @@ from tempfile import TemporaryDirectory
 
 from nightshift import __version__
 from nightshift.agent import AgentError
+from nightshift.commits import CommitError, commit_report
 from nightshift.config import ConfigError, RunConfig, load_config
 from nightshift.gate import clean, file, last_gate_line, start, state, wait
 from nightshift.items import ItemsError, load_items
@@ -95,6 +96,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--out", type=Path, default=None, help="write the summary to this file instead of stdout"
     )
 
+    commits_parser = subparsers.add_parser(
+        "commits", help="check that each item has exactly one well-formed commit"
+    )
+    commits_parser.add_argument("run_dir", type=Path, help="path of an existing run directory")
+    commits_parser.add_argument(
+        "--base", default=None, help="ref to start the range at; default is the merge-base with run.branch"
+    )
+
     gate_parser = subparsers.add_parser("gate", help="run a check behind the detached gate")
     gate_sub = gate_parser.add_subparsers(dest="gate_command", required=True)
     gate_start = gate_sub.add_parser("start", help="run lint and pre checks, then start the test command detached")
@@ -130,6 +139,8 @@ def main(argv: list[str] | None = None) -> int:
         return _doctor(args.run_dir)
     if args.command == "report":
         return _report(args.run_dir, out=args.out)
+    if args.command == "commits":
+        return _commits(args.run_dir, base=args.base)
     if args.command == "gate":
         return _gate(args)
     parser.print_help()
@@ -280,6 +291,27 @@ def _report(run_dir: Path, out: Path | None = None) -> int:
         return 0
     sys.stdout.write(text)
     return 0
+
+
+def _commits(run_dir: Path, base: str | None = None) -> int:
+    """Report commits that break the one-commit-per-item rule; exit 1 when any are found."""
+    try:
+        config = load_config(run_dir)
+        items = load_items(run_dir)
+    except (ConfigError, ItemsError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    if shutil.which("git") is None:
+        print("note: skipped because git is not on PATH")
+        return 0
+    try:
+        lines = commit_report(config, items, base=base)
+    except CommitError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    for line in lines:
+        print(line)
+    return 0 if not lines else 1
 
 
 def _gate(args: argparse.Namespace) -> int:
