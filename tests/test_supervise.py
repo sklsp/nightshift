@@ -74,7 +74,7 @@ def test_supervise_finishes_when_progress_gets_ticked(tmp_path: Path, monkeypatc
     calls = {"n": 0}
     launches: list[str] = []
 
-    def fake_is_running(cfg: RunConfig) -> bool:
+    def fake_is_running(cfg: RunConfig, quiet: bool = False) -> bool:
         calls["n"] += 1
         if calls["n"] == 3:
             (config.repo / "PROGRESS-sup.md").write_text(_TICKED, encoding="utf-8")
@@ -96,7 +96,7 @@ def test_supervise_stops_at_max_sessions(tmp_path: Path, monkeypatch) -> None:
     clock = Clock()
     launches: list[str] = []
 
-    monkeypatch.setattr(agent_module, "is_running", lambda cfg: False)
+    monkeypatch.setattr(agent_module, "is_running", lambda cfg, quiet=False: False)
     monkeypatch.setattr(agent_module, "launch", lambda cfg, message: launches.append(message))
 
     logs: list[str] = []
@@ -112,7 +112,7 @@ def test_supervise_stops_after_three_empty_sessions(tmp_path: Path, monkeypatch)
     clock = Clock()
     launches: list[str] = []
 
-    monkeypatch.setattr(agent_module, "is_running", lambda cfg: False)
+    monkeypatch.setattr(agent_module, "is_running", lambda cfg, quiet=False: False)
     monkeypatch.setattr(agent_module, "launch", lambda cfg, message: launches.append(message))
 
     logs: list[str] = []
@@ -129,7 +129,7 @@ def test_supervise_does_not_launch_while_running(tmp_path: Path, monkeypatch) ->
     events: list[str] = []
     calls = {"n": 0}
 
-    def fake_is_running(cfg: RunConfig) -> bool:
+    def fake_is_running(cfg: RunConfig, quiet: bool = False) -> bool:
         calls["n"] += 1
         events.append("status")
         return calls["n"] <= 2
@@ -152,7 +152,7 @@ def test_supervise_never_polls_faster_than_poll_seconds(tmp_path: Path, monkeypa
     times: list[float] = []
     calls = {"n": 0}
 
-    def fake_is_running(cfg: RunConfig) -> bool:
+    def fake_is_running(cfg: RunConfig, quiet: bool = False) -> bool:
         calls["n"] += 1
         times.append(clock.time())
         return calls["n"] <= 2
@@ -173,7 +173,7 @@ def test_grace_period_waits_for_agent_to_start(tmp_path: Path, monkeypatch) -> N
     clock = Clock()
     calls = {"n": 0}
 
-    def fake_is_running(cfg: RunConfig) -> bool:
+    def fake_is_running(cfg: RunConfig, quiet: bool = False) -> bool:
         calls["n"] += 1
         if calls["n"] == 5:
             (config.repo / "PROGRESS-sup.md").write_text(_TICKED, encoding="utf-8")
@@ -193,7 +193,7 @@ def test_grace_period_logs_when_agent_never_starts(tmp_path: Path, monkeypatch) 
     config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5)
     clock = Clock()
 
-    monkeypatch.setattr(agent_module, "is_running", lambda cfg: False)
+    monkeypatch.setattr(agent_module, "is_running", lambda cfg, quiet=False: False)
     monkeypatch.setattr(agent_module, "launch", lambda cfg, message: None)
 
     logs: list[str] = []
@@ -209,7 +209,7 @@ def test_changing_fingerprint_never_triggers(tmp_path: Path, monkeypatch) -> Non
     clock = Clock()
     calls = {"n": 0}
 
-    def fake_is_running(cfg: RunConfig) -> bool:
+    def fake_is_running(cfg: RunConfig, quiet: bool = False) -> bool:
         calls["n"] += 1
         if calls["n"] == 4:
             (config.repo / "PROGRESS-sup.md").write_text(_TICKED, encoding="utf-8")
@@ -237,7 +237,7 @@ def test_unchanged_fingerprint_triggers_and_runs_stop_once(tmp_path: Path, monke
     calls = {"n": 0}
     stops: list[RunConfig] = []
 
-    def fake_is_running(cfg: RunConfig) -> bool:
+    def fake_is_running(cfg: RunConfig, quiet: bool = False) -> bool:
         calls["n"] += 1
         return calls["n"] <= 6
 
@@ -263,7 +263,7 @@ def test_unchanged_fingerprint_without_stop_only_logs(tmp_path: Path, monkeypatc
     clock = Clock()
     calls = {"n": 0}
 
-    def fake_is_running(cfg: RunConfig) -> bool:
+    def fake_is_running(cfg: RunConfig, quiet: bool = False) -> bool:
         calls["n"] += 1
         return calls["n"] <= 4
 
@@ -322,7 +322,7 @@ poll_seconds = 0
     calls = {"n": 0}
     seen: list[str] = []
 
-    def fake_is_running(cfg: RunConfig) -> bool:
+    def fake_is_running(cfg: RunConfig, quiet: bool = False) -> bool:
         calls["n"] += 1
         if calls["n"] == 4:
             # We are still inside main(); the session one line must already be flushed.
@@ -346,7 +346,7 @@ def test_supervise_copies_progress_to_gate_dir(tmp_path: Path, monkeypatch) -> N
     clock = Clock()
     calls = {"n": 0}
 
-    def fake_is_running(cfg: RunConfig) -> bool:
+    def fake_is_running(cfg: RunConfig, quiet: bool = False) -> bool:
         calls["n"] += 1
         if calls["n"] == 3:
             (cfg.repo / "PROGRESS-sup.md").write_text(_TICKED, encoding="utf-8")
@@ -371,7 +371,7 @@ def test_supervise_uses_gate_copy_when_repo_progress_deleted(tmp_path: Path, mon
     clock = Clock()
     calls = {"n": 0}
 
-    def fake_is_running(cfg: RunConfig) -> bool:
+    def fake_is_running(cfg: RunConfig, quiet: bool = False) -> bool:
         calls["n"] += 1
         if calls["n"] == 3:
             (cfg.repo / "PROGRESS-sup.md").write_text(_TICKED, encoding="utf-8")
@@ -398,7 +398,7 @@ def test_supervise_missing_progress_everywhere_means_not_started(tmp_path: Path,
     (config.repo / "PROGRESS-sup.md").unlink()  # no repo file and no .gate copy yet
     clock = Clock()
 
-    monkeypatch.setattr(agent_module, "is_running", lambda cfg: False)
+    monkeypatch.setattr(agent_module, "is_running", lambda cfg, quiet=False: False)
     monkeypatch.setattr(agent_module, "launch", lambda cfg, message: None)
 
     logs: list[str] = []
@@ -410,3 +410,45 @@ def test_supervise_missing_progress_everywhere_means_not_started(tmp_path: Path,
     for line in logs:
         if line.startswith("session"):
             assert "0/2 done" in line
+
+
+def test_unknown_status_keeps_session_going_and_logs_recovery(tmp_path: Path, monkeypatch) -> None:
+    config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=1)
+    clock = Clock()
+    statuses = [None, None, True, False]
+    launches: list[str] = []
+
+    def fake_is_running(cfg: RunConfig, quiet: bool = False) -> bool | None:
+        return statuses.pop(0)
+
+    monkeypatch.setattr(agent_module, "is_running", fake_is_running)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: launches.append(message))
+
+    logs: list[str] = []
+    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+
+    assert code == 1
+    # The unknown polls did not end the session and did not trigger a launch; only the clean False ended it.
+    assert launches == []
+    assert statuses == []
+    assert "agent status readable again after 2 failed polls" in logs
+    assert not any("treating the session as ended" in line for line in logs)
+
+
+def test_ten_unknown_statuses_end_the_session(tmp_path: Path, monkeypatch) -> None:
+    config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=1)
+    clock = Clock()
+    launches: list[str] = []
+
+    def fake_is_running(cfg: RunConfig, quiet: bool = False) -> bool | None:
+        return None
+
+    monkeypatch.setattr(agent_module, "is_running", fake_is_running)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: launches.append(message))
+
+    logs: list[str] = []
+    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+
+    assert code == 1
+    assert launches == []
+    assert logs.count("agent status unknown for 10 polls; treating the session as ended") == 1

@@ -38,7 +38,7 @@ def _format_exit_code(code: int) -> str:
     return str(code)
 
 
-def is_running(config: RunConfig) -> bool | None:
+def is_running(config: RunConfig, *, quiet: bool = False) -> bool | None:
     """Return True when the status output matches, False when it does not, and None when the check failed."""
     if not config.status:
         raise AgentError("missing required key 'agent.status'")
@@ -52,10 +52,12 @@ def is_running(config: RunConfig) -> bool | None:
             stdin=subprocess.DEVNULL,
         )
     except (subprocess.TimeoutExpired, OSError) as exc:
-        print(f"agent status check failed: {exc}", file=sys.stderr)
+        if not quiet:
+            print(f"agent status check failed: {exc}", file=sys.stderr)
         return None
     if result.returncode != 0:
-        print(f"agent status command exited with code {_format_exit_code(result.returncode)}", file=sys.stderr)
+        if not quiet:
+            print(f"agent status command exited with code {_format_exit_code(result.returncode)}", file=sys.stderr)
         return None
     return re.search(config.running_pattern, result.stdout) is not None
 

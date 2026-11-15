@@ -31,6 +31,7 @@ class RunConfig:
     poll_seconds: int = 30
     max_sessions: int = 20
     launch_grace_polls: int = 4
+    status_retry_polls: int = 10
     idle_minutes: int = 60
     stop: list[str] = field(default_factory=list)
 
@@ -46,6 +47,7 @@ _AGENT_KEYS = {
     "poll_seconds",
     "max_sessions",
     "launch_grace_polls",
+    "status_retry_polls",
     "idle_minutes",
     "stop",
 }
@@ -100,6 +102,9 @@ def load_config(run_dir: Path) -> RunConfig:
     poll_seconds = _int(agent, "agent", "poll_seconds", 30)
     max_sessions = _int(agent, "agent", "max_sessions", 20)
     launch_grace_polls = _int(agent, "agent", "launch_grace_polls", 4)
+    status_retry_polls = _int(agent, "agent", "status_retry_polls", 10)
+    if status_retry_polls < 1:
+        raise ConfigError("invalid value for 'agent.status_retry_polls': must be at least 1")
     idle_minutes = _int(agent, "agent", "idle_minutes", 60)
     stop = _str_list(agent, "agent", "stop", [])
 
@@ -121,6 +126,7 @@ def load_config(run_dir: Path) -> RunConfig:
         poll_seconds=poll_seconds,
         max_sessions=max_sessions,
         launch_grace_polls=launch_grace_polls,
+        status_retry_polls=status_retry_polls,
         idle_minutes=idle_minutes,
         stop=stop,
     )

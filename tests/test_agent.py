@@ -71,6 +71,17 @@ def test_failed_status_check_is_unknown(tmp_path: Path, capsys: pytest.CaptureFi
     assert "agent status command exited with code 3" in err
 
 
+def test_quiet_failed_status_prints_nothing(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    config = _config(
+        tmp_path,
+        status=[sys.executable, "-c", "import sys; sys.exit(3)"],
+    )
+
+    assert is_running(config, quiet=True) is None
+    err = capsys.readouterr().err
+    assert err == ""
+
+
 def test_status_timeout_is_unknown(
     tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:

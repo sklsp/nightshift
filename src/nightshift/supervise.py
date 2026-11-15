@@ -85,24 +85,43 @@ def supervise(
     last_poll = now() - config.poll_seconds  # allow an immediate first check
     empty_streak = 0
     last_done = 0
+    unknown_streak = 0
 
     def _status() -> bool | None:
-        """Poll the agent and refresh the .gate progress copy, never faster than poll_seconds."""
-        nonlocal last_poll
+        """Poll the agent once, at most every poll_seconds; log unknown streak boundaries."""
+        nonlocal last_poll, unknown_streak
         wait_for = config.poll_seconds - (now() - last_poll)
         if wait_for > 0:
             sleep(wait_for)
         last_poll = now()
         _refresh_progress_copy(progress_path, run_dir)
-        return agent.is_running(config)
+        status = agent.is_running(config, quiet=unknown_streak > 0)
+        if status is None:
+            unknown_streak += 1
+            if unknown_streak == config.status_retry_polls:
+                log(f"agent status unknown for {config.status_retry_polls} polls; treating the session as ended")
+        elif unknown_streak > 0:
+            log(f"agent status readable again after {unknown_streak} failed polls")
+            unknown_streak = 0
+        return status
+
+    def _status_gave_up() -> bool:
+        """True when the unknown streak reached its cap and the session must end."""
+        return unknown_streak >= config.status_retry_polls
 
     for session in range(1, config.max_sessions + 1):
-        if not _status():
+        status = _status()
+        while status is None and not _status_gave_up():
+            status = _status()
+        if status is False:
             agent.launch(config, message)
             started = False
             for _poll in range(config.launch_grace_polls):
-                if _status():
+                grace_status = _status()
+                if grace_status is True:
                     started = True
+                    break
+                if grace_status is None and _status_gave_up():
                     break
             if not started:
                 log("agent did not start")
@@ -110,7 +129,8 @@ def supervise(
         fp_since = now()
         stuck_reported = False
         while True:
-            if not _status():
+            status = _status()
+            if status is False or (status is None and _status_gave_up()):
                 break
             fp = fingerprint(config.repo)
             if fp is not None and fp != last_fp:
@@ -125,8 +145,10 @@ def supervise(
                 log(f"agent looks stuck: no commit and no file change for {config.idle_minutes} minutes")
                 stuck_reported = True
                 agent.stop(config)
-                while _status():
-                    pass
+                while True:
+                    stop_status = _status()
+                    if stop_status is False or (stop_status is None and _status_gave_up()):
+                        break
         progress = _read_progress(progress_path, config.prefix, run_dir, log)
         log(f"session {session} ended: {len(progress.done)}/{total} done, {len(progress.blocked)} blocked")
         if progress.finished:
