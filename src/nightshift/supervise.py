@@ -39,13 +39,18 @@ def _repo_fingerprint(repo: Path) -> str | None:
     return f"{head.stdout.strip()}\n{status.stdout}"
 
 
+def _log(message: str) -> None:
+    """Print one supervisor line and flush it so a redirected log file fills in at once."""
+    print(message, flush=True)
+
+
 def supervise(
     config: RunConfig,
     run_dir: Path,
     *,
     sleep=time.sleep,
     now=time.time,
-    log=print,
+    log=_log,
     fingerprint=_repo_fingerprint,
 ) -> int:
     """Relaunch the agent until every item is done or a stop condition hits."""

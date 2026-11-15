@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 
 import nightshift.agent as agent_module
+from nightshift.cli import main
 from nightshift.config import RunConfig
 from nightshift.supervise import supervise
 
@@ -278,3 +279,63 @@ def test_unchanged_fingerprint_without_stop_only_logs(tmp_path: Path, monkeypatc
     # Without a stop command the supervisor only reports and lets the session end.
     assert logs.count("agent looks stuck: no commit and no file change for 1 minutes") == 1
     assert "stopped after 2 sessions" in logs[-1]
+
+
+class _FlushRecorder:
+    """Stands in for stdout redirected to a file; records the content after every flush."""
+
+    def __init__(self) -> None:
+        self.content = ""
+        self.snapshots: list[str] = []
+
+    def write(self, text: str) -> int:
+        self.content += text
+        return len(text)
+
+    def flush(self) -> None:
+        self.snapshots.append(self.content)
+
+
+def test_supervise_flushes_log_lines_through_main(tmp_path: Path, monkeypatch) -> None:
+    repo = tmp_path / "repo"
+    run_dir = tmp_path / "run"
+    repo.mkdir()
+    run_dir.mkdir()
+    (run_dir / "items.md").write_text(_ITEMS_MD, encoding="utf-8")
+    (repo / "PROGRESS-sup.md").write_text(_UNTICKED, encoding="utf-8")
+    toml = f"""[run]
+name = "sup"
+repo = "{repo.as_posix()}"
+
+[check]
+test = [{sys.executable!r}, "-c", "print('1 passed in 0.01s')"]
+
+[agent]
+launch = ["fake-launch"]
+status = ["fake-status"]
+poll_seconds = 0
+"""
+    (run_dir / "run.toml").write_text(toml, encoding="utf-8")
+
+    recorder = _FlushRecorder()
+    monkeypatch.setattr(sys, "stdout", recorder)
+    calls = {"n": 0}
+    seen: list[str] = []
+
+    def fake_is_running(cfg: RunConfig) -> bool:
+        calls["n"] += 1
+        if calls["n"] == 4:
+            # We are still inside main(); the session one line must already be flushed.
+            seen.extend(recorder.snapshots)
+        if calls["n"] == 6:
+            (cfg.repo / "PROGRESS-sup.md").write_text(_TICKED, encoding="utf-8")
+        return calls["n"] in (2, 5)
+
+    monkeypatch.setattr(agent_module, "is_running", fake_is_running)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: None)
+
+    code = main(["supervise", str(run_dir)])
+
+    assert code == 0
+    # The session line reached the redirected stream while the process was still running.
+    assert any("session 1 ended" in snapshot for snapshot in seen)
