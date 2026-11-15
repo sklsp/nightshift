@@ -89,6 +89,8 @@ myrun/                  the run directory, outside the repo
 | `agent.idle_minutes` | `60` | minutes without a repo change (HEAD plus git status) before the supervisor reports the agent stuck |
 | `agent.stop` | `[]` | command run once to end a session when it looks stuck; empty means do nothing |
 
+Note for Cline users: the launch command may print "zen dispatch failed" while the session still starts; nightshift does not treat launch output as failure.
+
 ## Lessons
 
 docs/LESSONS.md collects the rules learned from real overnight runs. Read it before your first run.

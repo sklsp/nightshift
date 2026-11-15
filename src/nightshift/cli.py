@@ -32,7 +32,7 @@ repo = ".."           # path to the repo root, relative to this run dir or absol
 # command = ["nightshift"]  # program the spec tells the agent to run; full path plus -m nightshift when not on PATH
 
 [check]
-test = ["pytest", "-q"]  # test command run from the repo root
+test = ["pytest"]        # test command run from the repo root; no -q here, see "Never -q twice" in docs/LESSONS.md
 # lint = []               # optional lint command before the tests, e.g. ["ruff", "check"]
 # pre = []                # optional commands run after lint and before the tests (list of lists)
 # min_passed = 1          # minimum passed tests for a green gate

@@ -5,6 +5,9 @@ Example for the Cline CLI in run.toml ([agent] section):
     launch = ["cline-cli", "-z", "-c", "<repo>", "-P", "lmstudio", "-m", "<model>", "{message}"]
     status = ["cline-cli", "history", "--json", "--limit", "1"]
     running_pattern = '"status":"running"'
+
+Note for Cline: the launch command may print "zen dispatch failed" while the session still starts;
+nightshift does not treat launch output as failure.
 """
 
 import re

@@ -4,6 +4,7 @@ import json
 import shutil
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -200,6 +201,14 @@ def test_init_refuses_existing_run(tmp_path: Path, capsys: pytest.CaptureFixture
     err = capsys.readouterr().err
     assert "error:" in err
     assert "already exists" in err
+
+
+def test_init_example_test_command_has_no_q(tmp_path: Path) -> None:
+    run_dir = tmp_path / "run"
+    assert main(["init", str(run_dir)]) == 0
+    data = tomllib.loads((run_dir / "run.toml").read_text(encoding="utf-8"))
+    # the example must not add -q when the project pytest config already sets it (docs/LESSONS.md)
+    assert data["check"]["test"] == ["pytest"]
 
 
 def test_build_reports_bad_config_on_stderr(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
