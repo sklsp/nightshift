@@ -5,4 +5,4 @@
 - [x] H3. supervise: log lines reach the file at once (154 passed in 10.06s)
 - [x] H4. init: the example config avoids the double -q trap (155 passed in 9.97s)
 - [x] H5. supervise: a finished run stays finished (158 passed in 10.09s)
-- [ ] H6. release: 0.6.0
+- [x] H6. release: 0.6.0 (158 passed in 10.10s)

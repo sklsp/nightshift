@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.0
+
+- gate: wait exits with code 1 when the check fails and writes the result line to .gate/result.txt so a failed run is visible in scripts and logs
+- render: item specs carry a WHEN DONE block (run the check until both pass, tick the item, commit) instead of a bare checklist line
+- supervise: copies the progress file into .gate on every poll and reads that copy when cleanup removed the repo file, so a finished run stays finished
+- release: version 0.6.0 and this changelog; all three fixes came from the first dogfood run (nightshift6)
+
 ## 0.5.0
 
 - config: [run] command names the program the rendered spec tells the agent to run; every gate hint uses the same prefix, stored in .gate/ at start so wait prints what it was started with
