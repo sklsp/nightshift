@@ -120,3 +120,28 @@ def test_render_run_refuses_item_body_with_dash(tmp_path: Path) -> None:
     message = str(excinfo.value)
     assert "item-01.md" in message
     assert "em dash" in message
+
+
+def test_start_file_has_keep_the_why_rule(tmp_path: Path) -> None:
+    out = tmp_path / "out"
+    render_run(_config(tmp_path), _items(), out)
+    text = (out / "00-start.md").read_text(encoding="utf-8")
+    assert "**Keep the why:**" in text
+    assert "keep any design reason in the old text" in text
+    assert "word into a comment. Never delete it." in text
+
+
+def test_start_file_has_append_only_notes_rule(tmp_path: Path) -> None:
+    out = tmp_path / "out"
+    render_run(_config(tmp_path), _items(), out)
+    text = (out / "00-start.md").read_text(encoding="utf-8")
+    assert "**Notes are append-only:**" in text
+    assert "BUGS.md, IDEAS.md and BLOCKED.md only grow" in text
+    assert "never rewrite or shorten them" in text
+
+
+def test_lessons_md_has_a_section_per_new_rule() -> None:
+    lessons_path = Path(__file__).resolve().parent.parent / "docs" / "LESSONS.md"
+    lessons = lessons_path.read_text(encoding="utf-8")
+    assert "## Keep the why when you rewrite text" in lessons
+    assert "## Notes files are append-only" in lessons

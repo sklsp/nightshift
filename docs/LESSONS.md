@@ -31,3 +31,9 @@ Agents copy punctuation from their instructions straight into code, docs and com
 
 ## Stop after three empty sessions
 A supervisor that keeps relaunching an agent which produces nothing burns tokens forever on a dead end. After three consecutive sessions with no new item done, stop and report; a human should look at what is stuck.
+
+## Keep the why when you rewrite text
+When an agent rewrites a docstring or comment it tends to drop the design reason that lived in the old wording. The rule: move the reason word for word into a comment instead of deleting it. The code may change; the why stays.
+
+## Notes files are append-only
+BUGS.md, IDEAS.md and BLOCKED.md only grow. A session that rewrites or shortens one silently loses history; in a real run a bug report disappeared when an agent tidied the file. Add lines, never rewrite.

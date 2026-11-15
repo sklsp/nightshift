@@ -37,6 +37,10 @@ RULES
 - **Tests:** every behaviour an item names gets a test that fails if the behaviour breaks. Literal expected values.
   Never delete or weaken a test from an earlier item; if a later item changes behaviour on purpose, update the test
   and say why in the commit body.
+- **Keep the why:** when you rewrite a docstring or comment, keep any design reason in the old text: move it word for
+  word into a comment. Never delete it.
+- **Notes are append-only:** BUGS.md, IDEAS.md and BLOCKED.md only grow. Add lines; never rewrite or shorten them. A real
+  run lost a bug report this way.
 - **Commits:** one commit per item, message `${prefix}<n>: <title>` (for example `${prefix}1: fix the parser`), body = the last
   pytest line. The tick goes in the same commit. Stage only the files of the item plus $progress_file, with
   `git add <path>`. Never `git add -A` or `git add .`. Never `--amend`.
