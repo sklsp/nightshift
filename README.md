@@ -34,6 +34,7 @@ Python 3.11 or newer; no other dependencies. This puts `nightshift` on your PATH
    nightshift status myrun
    nightshift status myrun --json   # the same summary as one JSON object
    nightshift report myrun          # markdown summary of a finished run for a pull request body
+    nightshift commits myrun         # check that each item has exactly one well-formed commit
    ```
 
 ## The gate
@@ -74,6 +75,7 @@ myrun/                  the run directory, outside the repo
 | `run.prefix` | `"T"` | item id prefix: T1, T2, ... |
 | `check.test` | required | test command, run from the repo root |
 | `check.lint` | `[]` | optional lint command that must pass before tests start |
+| `check.pre` | `[]` | extra commands run after lint and before the tests, each a list of strings; first failure stops the start |
 | `check.min_passed` | `1` | minimum passed tests for a green gate on `gate start` |
 | `check.wait_seconds` | `25` | how long one `gate wait` call may block |
 | `check.timeout_hint_seconds` | `30` | the command time limit the agent works under (informational) |
@@ -83,6 +85,8 @@ myrun/                  the run directory, outside the repo
 | `agent.poll_seconds` | `30` | how often the supervisor checks the agent and progress |
 | `agent.max_sessions` | `20` | sessions allowed before the supervisor gives up |
 | `agent.launch_grace_polls` | `4` | status polls to wait for a launched agent to report running; if it never does, the session is counted as empty |
+| `agent.idle_minutes` | `60` | minutes without a repo change (HEAD plus git status) before the supervisor reports the agent stuck |
+| `agent.stop` | `[]` | command run once to end a session when it looks stuck; empty means do nothing |
 
 ## Lessons
 

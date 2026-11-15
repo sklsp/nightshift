@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.0
+
+- gate: [check] pre runs any number of extra commands between lint and tests; the first one that fails stops the start
+- supervise: fingerprints HEAD plus git status on every poll, reports a stuck agent when nothing changes for idle_minutes and runs [agent] stop to end the session
+- cli: new commits command checks that each item has exactly one well-formed commit
+- render: two more rules in the start file (keep the why; notes files are append-only)
+- release: version 0.4.0 and this changelog
+
 ## 0.3.0
 
 - cli: doctor names every check it runs and prints one ok or problem line per check
