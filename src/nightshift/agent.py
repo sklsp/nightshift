@@ -31,8 +31,15 @@ def launch(config: RunConfig, message: str) -> None:
     subprocess.run(command, cwd=config.repo, stdin=subprocess.DEVNULL)
 
 
-def is_running(config: RunConfig) -> bool:
-    """True when the configured status output matches running_pattern."""
+def _format_exit_code(code: int) -> str:
+    """Format an exit code, adding hex when it is above 0x7FFFFFFF or below zero."""
+    if code > 0x7FFFFFFF or code < 0:
+        return f"{code} (0x{code & 0xFFFFFFFF:08X})"
+    return str(code)
+
+
+def is_running(config: RunConfig) -> bool | None:
+    """Return True when the status output matches, False when it does not, and None when the check failed."""
     if not config.status:
         raise AgentError("missing required key 'agent.status'")
     try:
@@ -46,10 +53,10 @@ def is_running(config: RunConfig) -> bool:
         )
     except (subprocess.TimeoutExpired, OSError) as exc:
         print(f"agent status check failed: {exc}", file=sys.stderr)
-        return False
+        return None
     if result.returncode != 0:
-        print(f"agent status command exited with code {result.returncode}", file=sys.stderr)
-        return False
+        print(f"agent status command exited with code {_format_exit_code(result.returncode)}", file=sys.stderr)
+        return None
     return re.search(config.running_pattern, result.stdout) is not None
 
 

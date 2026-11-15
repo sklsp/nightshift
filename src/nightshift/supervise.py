@@ -86,7 +86,7 @@ def supervise(
     empty_streak = 0
     last_done = 0
 
-    def _status() -> bool:
+    def _status() -> bool | None:
         """Poll the agent and refresh the .gate progress copy, never faster than poll_seconds."""
         nonlocal last_poll
         wait_for = config.poll_seconds - (now() - last_poll)
