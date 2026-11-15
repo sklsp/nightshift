@@ -22,9 +22,9 @@ $items_list
 
 THE CHECK (cwd = repo; before EVERY commit, it must pass)
 - `$check_command`
-- The lint part prints its all-pass line and the test part ends with `N passed` and 0 failed. The whole suite must
-  stay under 20 seconds: tests use tiny timeouts (0.05 s), fake commands (`sys.executable -c ...`) and tmp_path,
-  never real sleeps above 0.2 s and never the network. Do not add flags that hide the summary line of the test part.
+- The lint part prints its all-pass line and the test part ends with `N passed` and 0 failed. When the full check takes
+  longer than $timeout_hint seconds, run it through the gate, never directly; one test file directly is fine. Do not add
+  flags that hide the summary line of the test part.
 
 THE GATE
 Your commands time out after 30 seconds. If a check takes longer than one command allows, run it through the gate:

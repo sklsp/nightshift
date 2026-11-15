@@ -135,6 +135,32 @@ def test_start_file_has_run_name_check_and_gate(tmp_path: Path) -> None:
     assert f"nightshift gate wait {run_dir} 2" in text
 
 
+def test_start_file_gate_rule_names_configured_limit(tmp_path: Path) -> None:
+    config = RunConfig(name="demo", repo=tmp_path / "repo", test=["pytest"], timeout_hint_seconds=45)
+    out = tmp_path / "out"
+    render_run(config, _items(), out)
+    text = (out / "00-start.md").read_text(encoding="utf-8")
+    assert "20 seconds" not in text
+    assert "longer than 45 seconds, run it through the gate" in text
+
+
+def test_check_command_quotes_arguments_with_space_or_glob(tmp_path: Path) -> None:
+    config = RunConfig(
+        name="demo",
+        repo=tmp_path / "repo",
+        lint=["C:/Program Files/ruff/ruff.exe", "check"],
+        pre=[["node", "--test", "tests/web/**/*.test.mjs"], ["grep", "-rn", "[Tt]odo?", "src"]],
+        test=["pytest", "-q"],
+    )
+    out = tmp_path / "out"
+    render_run(config, _items(), out)
+    text = (out / "00-start.md").read_text(encoding="utf-8")
+    assert '"C:/Program Files/ruff/ruff.exe" check' in text
+    assert 'node --test "tests/web/**/*.test.mjs"' in text
+    assert 'grep -rn "[Tt]odo?" src' in text
+    assert "pytest -q" in text
+
+
 def test_no_lint_renders_test_command_only(tmp_path: Path) -> None:
     config = RunConfig(name="demo", repo=tmp_path / "repo", test=["pytest", "-q"])
     out = tmp_path / "out"

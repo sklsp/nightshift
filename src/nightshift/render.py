@@ -4,7 +4,7 @@ from importlib.resources import files
 from pathlib import Path
 from string import Template
 
-from nightshift.config import RunConfig, command_prefix
+from nightshift.config import RunConfig, command_prefix, quote_arg
 from nightshift.items import Item
 from nightshift.textlint import lint_files
 
@@ -62,6 +62,7 @@ def _start_text(config: RunConfig, total: int, run_dir: Path) -> str:
         check_command=_check_command(config),
         command=command_prefix(config),
         run_dir=run_dir.resolve().as_posix(),
+        timeout_hint=str(config.timeout_hint_seconds),
     )
 
 
@@ -96,8 +97,8 @@ def _progress_path(config: RunConfig) -> Path:
 
 def _check_command(config: RunConfig) -> str:
     """Join lint, every pre check and the test command into one check line."""
-    parts = [" ".join(command) for command in (config.lint, *config.pre) if command]
-    parts.append(" ".join(config.test))
+    parts = [" ".join(quote_arg(part) for part in command) for command in (config.lint, *config.pre) if command]
+    parts.append(" ".join(quote_arg(part) for part in config.test))
     return " ; ".join(parts)
 
 

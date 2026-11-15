@@ -127,13 +127,13 @@ def load_config(run_dir: Path) -> RunConfig:
 
 
 def command_prefix(config: RunConfig) -> str:
-    """Join run.command with spaces, quoting parts that contain a space."""
-    return " ".join(_quote_part(part) for part in config.command)
+    """Join run.command with spaces, quoting parts that need shell protection."""
+    return " ".join(quote_arg(part) for part in config.command)
 
 
-def _quote_part(part: str) -> str:
-    """Wrap one command part in double quotes when it contains a space."""
-    if " " in part:
+def quote_arg(part: str) -> str:
+    """Wrap one command argument in double quotes when it contains a space or a glob character."""
+    if any(ch in part for ch in (" ", "*", "?", "[")):
         return f'"{part}"'
     return part
 
