@@ -28,9 +28,10 @@ THE CHECK (cwd = repo; before EVERY commit, it must pass)
 
 THE GATE
 Your commands time out after 30 seconds. If a check takes longer than one command allows, run it through the gate:
-start it once with `nightshift gate start <run dir>`, then poll with `nightshift gate wait <run dir> 1` and again
-with `nightshift gate wait <run dir> 2`. Each call returns within the command limit; when the check is done, the
-gate says pass or fail. If a direct run takes longer than the limit, your tests are too slow: fix them.
+start it once with `$command gate start <run dir>`, then poll with `$command gate wait <run dir> 1` and again
+with `$command gate wait <run dir> 2`. Each call returns within the command limit; when the check is done, the
+gate says pass or fail. One test file with coverage of one module: `$command gate file <run dir> <test file> <module>`.
+Check progress any time with `$command status <run dir>`. If a direct run takes longer than the limit, your tests are too slow: fix them.
 
 RULES
 - **Only these items.** Ideas go as one line in IDEAS.md in the run directory. Never re-scope an item.

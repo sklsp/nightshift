@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from nightshift.config import ConfigError, RunConfig, load_config
+from nightshift.config import ConfigError, RunConfig, command_prefix, load_config
 
 
 def _write(run_dir: Path, text: str) -> None:
@@ -31,6 +31,7 @@ name = "demo-run"
 repo = "repo"
 branch = "night"
 prefix = "AB"
+command = ["python", "-m", "nightshift"]
 
 [check]
 lint = ["ruff", "check"]
@@ -57,6 +58,7 @@ stop = ["lms", "stop"]
     assert cfg.repo == tmp_path / "repo"
     assert cfg.branch == "night"
     assert cfg.prefix == "AB"
+    assert cfg.command == ["python", "-m", "nightshift"]
     assert cfg.lint == ["ruff", "check"]
     assert cfg.pre == [["mypy", "--strict"], ["ruff", "format", "--check"]]
     assert cfg.test == ["pytest", "-q"]
@@ -78,6 +80,7 @@ def test_defaults_when_optional_keys_missing(tmp_path: Path) -> None:
     cfg = load_config(tmp_path)
     assert cfg.branch == "main"
     assert cfg.prefix == "T"
+    assert cfg.command == ["nightshift"]
     assert cfg.lint == []
     assert cfg.pre == []
     assert cfg.min_passed == 1
@@ -203,6 +206,39 @@ def test_invalid_prefix_too_long(tmp_path: Path) -> None:
     _write(tmp_path, '[run]\nname = "demo"\nrepo = "."\nprefix = "TOOLONG"\n\n[check]\ntest = ["x"]')
     with pytest.raises(ConfigError, match="invalid value for 'run.prefix'"):
         load_config(tmp_path)
+
+
+def test_command_not_a_list_is_rejected(tmp_path: Path) -> None:
+    _write(tmp_path, '[run]\nname = "demo"\nrepo = "."\ncommand = "nightshift"\n\n[check]\ntest = ["x"]')
+    with pytest.raises(ConfigError, match="wrong type for 'run.command': expected a list of str"):
+        load_config(tmp_path)
+
+
+def test_command_with_non_string_part_is_rejected(tmp_path: Path) -> None:
+    _write(tmp_path, '[run]\nname = "demo"\nrepo = "."\ncommand = ["nightshift", 5]\n\n[check]\ntest = ["x"]')
+    with pytest.raises(ConfigError, match="wrong type for 'run.command': expected a list of str"):
+        load_config(tmp_path)
+
+
+def test_command_empty_list_is_rejected(tmp_path: Path) -> None:
+    _write(tmp_path, '[run]\nname = "demo"\nrepo = "."\ncommand = []\n\n[check]\ntest = ["x"]')
+    with pytest.raises(ConfigError, match="invalid value for 'run.command'"):
+        load_config(tmp_path)
+
+
+def test_command_prefix_joins_parts_with_spaces() -> None:
+    config = RunConfig(name="demo", repo=Path("repo"), test=["pytest"], command=["python", "-m", "nightshift"])
+    assert command_prefix(config) == "python -m nightshift"
+
+
+def test_command_prefix_quotes_part_with_space() -> None:
+    config = RunConfig(
+        name="demo",
+        repo=Path("repo"),
+        test=["pytest"],
+        command=["C:/Program Files/nightshift/python.exe", "-m", "nightshift"],
+    )
+    assert command_prefix(config) == '"C:/Program Files/nightshift/python.exe" -m nightshift'
 
 
 def test_unknown_top_level_key(tmp_path: Path) -> None:

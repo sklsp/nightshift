@@ -29,6 +29,7 @@ name = "example"      # short id for PROGRESS-<name>.md and commit ids (letters,
 repo = ".."           # path to the repo root, relative to this run dir or absolute
 # branch = "main"     # branch to work on; never pushed
 # prefix = "T"        # item id prefix: T1, T2, ...
+# command = ["nightshift"]  # program the spec tells the agent to run; full path plus -m nightshift when not on PATH
 
 [check]
 test = ["pytest", "-q"]  # test command run from the repo root

@@ -4,7 +4,7 @@ from importlib.resources import files
 from pathlib import Path
 from string import Template
 
-from nightshift.config import RunConfig
+from nightshift.config import RunConfig, command_prefix
 from nightshift.items import Item
 from nightshift.textlint import lint_files
 
@@ -60,6 +60,7 @@ def _start_text(config: RunConfig, total: int, run_dir: Path) -> str:
         checklist_file=(run_dir / "checklist.txt").as_posix(),
         progress_file=_progress_path(config).as_posix(),
         check_command=_check_command(config),
+        command=command_prefix(config),
     )
 
 
@@ -81,6 +82,7 @@ def _item_text(config: RunConfig, item: Item, total: int, run_dir: Path) -> str:
         id=f"{config.prefix}{item.number}",
         start_file=start_file,
         progress_file=_progress_path(config).as_posix(),
+        command=command_prefix(config),
         ending=ending,
     )
 

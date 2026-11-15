@@ -124,6 +124,57 @@ def test_second_pre_check_failure_stops_gate_with_its_name(
     assert not (run_dir / ".gate" / "log").exists()
 
 
+def test_start_hint_uses_custom_command(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    config = _config(tmp_path)
+    custom = RunConfig(
+        name="gate-test",
+        repo=config.repo,
+        test=list(PASS_CMD),
+        min_passed=1,
+        wait_seconds=2,
+        command=["python", "-m", "nightshift"],
+    )
+    run_dir = _run_dir(tmp_path)
+    assert start(custom, run_dir) == 0
+    out = capsys.readouterr().out
+    assert f"python -m nightshift gate wait {run_dir} 1" in out
+
+
+def test_stale_wait_hint_uses_prefix_saved_at_start(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    started_with = RunConfig(
+        name="gate-test",
+        repo=tmp_path / "repo",
+        test=list(PASS_CMD),
+        min_passed=1,
+        wait_seconds=2,
+        command=["python", "-m", "nightshift"],
+    )
+    (tmp_path / "repo").mkdir()
+    run_dir = _run_dir(tmp_path)
+    assert start(started_with, run_dir) == 0
+    capsys.readouterr()
+
+    # Age the log so wait reports GATE STALE without polling.
+    old = time.time() - 300
+    os.utime(run_dir / ".gate" / "log", (old, old))
+
+    # A later config with a different command must not change the hint:
+    # wait prints the same command the gate was started with.
+    changed = RunConfig(
+        name="gate-test",
+        repo=tmp_path / "repo",
+        test=list(PASS_CMD),
+        min_passed=1,
+        wait_seconds=2,
+        command=["nightshift"],
+    )
+    assert wait(changed, run_dir, 1) == 1
+    out = capsys.readouterr().out
+    assert f"GATE STALE: run python -m nightshift gate start {run_dir} again" in out
+
+
 def test_second_start_while_running_does_not_launch_again(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     config = _config(tmp_path)
     run_dir = _run_dir(tmp_path)

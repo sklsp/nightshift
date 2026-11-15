@@ -19,12 +19,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from nightshift.config import RunConfig
+from nightshift.config import RunConfig, command_prefix
 
 _GATE_DIR = ".gate"
 _LOG_NAME = "log"
 _DONE_NAME = "done"
 _MODE_NAME = "mode"
+_COMMAND_NAME = "command"
 _FRESH_SECONDS = 120
 _TAIL_LINES = 20
 _POLL_SECONDS = 0.1
@@ -62,10 +63,20 @@ def _mode_path(run_dir: Path) -> Path:
     return _gate_dir(run_dir) / _MODE_NAME
 
 
+def _saved_prefix(config: RunConfig, run_dir: Path) -> str:
+    """Return the command prefix saved at start, or the one from config when there is none."""
+    path = _gate_dir(run_dir) / _COMMAND_NAME
+    if path.is_file():
+        text = path.read_text(encoding="utf-8", errors="replace").strip()
+        if text:
+            return text
+    return command_prefix(config)
+
+
 def _preflight(config: RunConfig, run_dir: Path) -> int | None:
     """Refuse a double start and run lint plus every pre check in order; return an exit code or None."""
     if _run_is_going(run_dir):
-        print(f"GATE ALREADY RUNNING; now run: nightshift gate wait {run_dir} 1")
+        print(f"GATE ALREADY RUNNING; now run: {_saved_prefix(config, run_dir)} gate wait {run_dir} 1")
         return 0
     if _is_stale(run_dir):
         print("previous gate run looks stale; starting a new one")
@@ -109,6 +120,7 @@ def _launch(config: RunConfig, run_dir: Path, command: list[str], mode_line: str
         done_path.unlink()
     log_path = _log_path(run_dir)
     _mode_path(run_dir).write_text(f"{mode_line}\n{' '.join(command)}", encoding="utf-8", newline="\n")
+    (_gate_dir(run_dir) / _COMMAND_NAME).write_text(command_prefix(config), encoding="utf-8", newline="\n")
 
     with open(log_path, "wb") as log_file:
         subprocess.Popen(
@@ -132,7 +144,7 @@ def _launch(config: RunConfig, run_dir: Path, command: list[str], mode_line: str
             **_detach_kwargs(),
         )
 
-    print(f"GATE STARTED; now run: nightshift gate wait {run_dir} 1")
+    print(f"GATE STARTED; now run: {command_prefix(config)} gate wait {run_dir} 1")
     return 0
 
 
@@ -215,9 +227,10 @@ def _is_stale(run_dir: Path) -> bool:
 
 def wait(config: RunConfig, run_dir: Path, n: int) -> int:
     """Wait for the gated test run to finish and report its result."""
+    prefix = _saved_prefix(config, run_dir)
     done_path = _done_path(run_dir)
     if not done_path.is_file() and _is_stale(run_dir):
-        print(f"GATE STALE: run nightshift gate start {run_dir} again")
+        print(f"GATE STALE: run {prefix} gate start {run_dir} again")
         return 1
     deadline = time.monotonic() + config.wait_seconds
     while not done_path.is_file():
@@ -229,7 +242,7 @@ def wait(config: RunConfig, run_dir: Path, n: int) -> int:
         # The number changes on every call ON PURPOSE: some agents cancel a session
         # that repeats one tool call 5 times in a row, so the next command must
         # never be identical to this one.
-        print(f"RUNNING {_last_percent(_log_path(run_dir))}%; next run: nightshift gate wait {run_dir} {n + 1}")
+        print(f"RUNNING {_last_percent(_log_path(run_dir))}%; next run: {prefix} gate wait {run_dir} {n + 1}")
         return 0
 
     text = _log_text(run_dir)

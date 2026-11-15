@@ -42,6 +42,47 @@ def test_checklist_lines(tmp_path: Path) -> None:
     assert text == "- [ ] T1. first item\n- [ ] T2. second item\n- [ ] T3. third item\n"
 
 
+def test_custom_command_renders_prefix_in_start_file(tmp_path: Path) -> None:
+    config = RunConfig(
+        name="demo", repo=tmp_path / "repo", test=["pytest"], command=["python", "-m", "nightshift"]
+    )
+    out = tmp_path / "out"
+    render_run(config, _items(), out)
+    text = (out / "00-start.md").read_text(encoding="utf-8")
+    assert "python -m nightshift gate start <run dir>" in text
+    assert "python -m nightshift gate wait <run dir> 1" in text
+    assert "python -m nightshift gate file <run dir> <test file> <module>" in text
+    assert "python -m nightshift status <run dir>" in text
+
+
+def test_custom_command_renders_prefix_in_item_files(tmp_path: Path) -> None:
+    config = RunConfig(
+        name="demo", repo=tmp_path / "repo", test=["pytest"], command=["python", "-m", "nightshift"]
+    )
+    out = tmp_path / "out"
+    written = render_run(config, _items(), out)
+    for path in written:
+        if path.name.startswith("item-"):
+            text = path.read_text(encoding="utf-8")
+            assert "python -m nightshift gate start <run dir>" in text
+            assert "python -m nightshift gate wait <run dir> 1" in text
+
+
+def test_command_part_with_space_is_quoted_in_rendered_files(tmp_path: Path) -> None:
+    config = RunConfig(
+        name="demo",
+        repo=tmp_path / "repo",
+        test=["pytest"],
+        command=["C:/Program Files/nightshift/python.exe", "-m", "nightshift"],
+    )
+    out = tmp_path / "out"
+    written = render_run(config, _items(), out)
+    for path in written:
+        if path.name == "00-start.md" or path.name.startswith("item-"):
+            text = path.read_text(encoding="utf-8")
+            assert '"C:/Program Files/nightshift/python.exe" -m nightshift gate start <run dir>' in text
+
+
 def test_item_file_has_number_title_body_and_next_pointer(tmp_path: Path) -> None:
     out = tmp_path / "out"
     render_run(_config(tmp_path), _items(), out)

@@ -19,6 +19,7 @@ class RunConfig:
     test: list[str]
     branch: str = "main"
     prefix: str = "T"
+    command: list[str] = field(default_factory=lambda: ["nightshift"])
     lint: list[str] = field(default_factory=list)
     pre: list[list[str]] = field(default_factory=list)
     min_passed: int = 1
@@ -36,7 +37,7 @@ class RunConfig:
 
 _SECTIONS = ("run", "check", "agent")
 
-_RUN_KEYS = {"name", "repo", "branch", "prefix"}
+_RUN_KEYS = {"name", "repo", "branch", "prefix", "command"}
 _CHECK_KEYS = {"lint", "pre", "test", "min_passed", "wait_seconds", "timeout_hint_seconds"}
 _AGENT_KEYS = {
     "launch",
@@ -82,6 +83,10 @@ def load_config(run_dir: Path) -> RunConfig:
     if not re.fullmatch(r"[A-Z]{1,3}", prefix):
         raise ConfigError("invalid value for 'run.prefix': 1 to 3 capital letters")
 
+    command = _str_list(run, "run", "command", ["nightshift"])
+    if not command:
+        raise ConfigError("invalid value for 'run.command': at least one part is required")
+
     lint = _str_list(check, "check", "lint", [])
     pre = _str_list_of_lists(check, "check", "pre", [])
     test = _required_str_list(check, "check", "test")
@@ -104,6 +109,7 @@ def load_config(run_dir: Path) -> RunConfig:
         test=test,
         branch=branch,
         prefix=prefix,
+        command=command,
         lint=lint,
         pre=pre,
         min_passed=min_passed,
@@ -118,6 +124,18 @@ def load_config(run_dir: Path) -> RunConfig:
         idle_minutes=idle_minutes,
         stop=stop,
     )
+
+
+def command_prefix(config: RunConfig) -> str:
+    """Join run.command with spaces, quoting parts that contain a space."""
+    return " ".join(_quote_part(part) for part in config.command)
+
+
+def _quote_part(part: str) -> str:
+    """Wrap one command part in double quotes when it contains a space."""
+    if " " in part:
+        return f'"{part}"'
+    return part
 
 
 def _section(data: dict[str, object], name: str, allowed: set[str]) -> dict[str, object]:
