@@ -7,6 +7,7 @@ status) on every poll; if it does not change for idle_minutes the session is
 reported as stuck and, when configured, stopped.
 """
 
+import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -14,7 +15,7 @@ from pathlib import Path
 from nightshift import agent
 from nightshift.config import RunConfig
 from nightshift.items import load_items
-from nightshift.progress import read_progress
+from nightshift.progress import Progress, read_progress
 
 
 def _repo_fingerprint(repo: Path) -> str | None:
@@ -44,6 +45,25 @@ def _log(message: str) -> None:
     print(message, flush=True)
 
 
+def _refresh_progress_copy(progress_file: Path, run_dir: Path) -> None:
+    """Copy the repo progress file into .gate so a finished run stays finished if cleanup removes it."""
+    target = run_dir / ".gate" / "progress.md"
+    if progress_file.is_file():
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(progress_file, target)
+
+
+def _read_progress(progress_file: Path, prefix: str, run_dir: Path, log=_log) -> Progress:
+    """Read progress from the repo file; when cleanup removed it, read the .gate copy instead."""
+    if progress_file.is_file():
+        return read_progress(progress_file, prefix)
+    fallback = run_dir / ".gate" / "progress.md"
+    if fallback.is_file():
+        log("repo progress file missing; reading the .gate copy")
+        return read_progress(fallback, prefix)
+    return read_progress(progress_file, prefix)
+
+
 def supervise(
     config: RunConfig,
     run_dir: Path,
@@ -67,12 +87,13 @@ def supervise(
     last_done = 0
 
     def _status() -> bool:
-        """Check the agent, never faster than poll_seconds since the previous check."""
+        """Poll the agent and refresh the .gate progress copy, never faster than poll_seconds."""
         nonlocal last_poll
         wait_for = config.poll_seconds - (now() - last_poll)
         if wait_for > 0:
             sleep(wait_for)
         last_poll = now()
+        _refresh_progress_copy(progress_path, run_dir)
         return agent.is_running(config)
 
     for session in range(1, config.max_sessions + 1):
@@ -106,7 +127,7 @@ def supervise(
                 agent.stop(config)
                 while _status():
                     pass
-        progress = read_progress(progress_path, config.prefix)
+        progress = _read_progress(progress_path, config.prefix, run_dir, log)
         log(f"session {session} ended: {len(progress.done)}/{total} done, {len(progress.blocked)} blocked")
         if progress.finished:
             return 0

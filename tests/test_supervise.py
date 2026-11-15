@@ -339,3 +339,74 @@ poll_seconds = 0
     assert code == 0
     # The session line reached the redirected stream while the process was still running.
     assert any("session 1 ended" in snapshot for snapshot in seen)
+
+
+def test_supervise_copies_progress_to_gate_dir(tmp_path: Path, monkeypatch) -> None:
+    config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5)
+    clock = Clock()
+    calls = {"n": 0}
+
+    def fake_is_running(cfg: RunConfig) -> bool:
+        calls["n"] += 1
+        if calls["n"] == 3:
+            (cfg.repo / "PROGRESS-sup.md").write_text(_TICKED, encoding="utf-8")
+        return calls["n"] in (2, 3)
+
+    monkeypatch.setattr(agent_module, "is_running", fake_is_running)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: None)
+
+    logs: list[str] = []
+    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+
+    assert code == 0
+    copy = run_dir / ".gate" / "progress.md"
+    assert copy.is_file()
+    # The repo file was still there at session end, so it was read directly and the copy kept current.
+    assert copy.read_text(encoding="utf-8") == _TICKED
+    assert logs == ["session 1 ended: 2/2 done, 0 blocked"]
+
+
+def test_supervise_uses_gate_copy_when_repo_progress_deleted(tmp_path: Path, monkeypatch) -> None:
+    config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5)
+    clock = Clock()
+    calls = {"n": 0}
+
+    def fake_is_running(cfg: RunConfig) -> bool:
+        calls["n"] += 1
+        if calls["n"] == 3:
+            (cfg.repo / "PROGRESS-sup.md").write_text(_TICKED, encoding="utf-8")
+        if calls["n"] == 4:
+            # A normal cleanup step before merging removes the progress file.
+            (cfg.repo / "PROGRESS-sup.md").unlink()
+        return calls["n"] in (2, 3)
+
+    monkeypatch.setattr(agent_module, "is_running", fake_is_running)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: None)
+
+    logs: list[str] = []
+    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+
+    assert code == 0
+    # The finished state survived the cleanup because the supervisor read its own copy.
+    assert (run_dir / ".gate" / "progress.md").read_text(encoding="utf-8") == _TICKED
+    assert logs.count("repo progress file missing; reading the .gate copy") == 1
+    assert logs[-1] == "session 1 ended: 2/2 done, 0 blocked"
+
+
+def test_supervise_missing_progress_everywhere_means_not_started(tmp_path: Path, monkeypatch) -> None:
+    config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=2)
+    (config.repo / "PROGRESS-sup.md").unlink()  # no repo file and no .gate copy yet
+    clock = Clock()
+
+    monkeypatch.setattr(agent_module, "is_running", lambda cfg: False)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: None)
+
+    logs: list[str] = []
+    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+
+    assert code == 1
+    # Nothing was copied because there was nothing to copy.
+    assert not (run_dir / ".gate" / "progress.md").exists()
+    for line in logs:
+        if line.startswith("session"):
+            assert "0/2 done" in line
