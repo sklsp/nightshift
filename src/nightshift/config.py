@@ -30,13 +30,24 @@ class RunConfig:
     poll_seconds: int = 30
     max_sessions: int = 20
     launch_grace_polls: int = 4
+    idle_minutes: int = 60
+    stop: list[str] = field(default_factory=list)
 
 
 _SECTIONS = ("run", "check", "agent")
 
 _RUN_KEYS = {"name", "repo", "branch", "prefix"}
 _CHECK_KEYS = {"lint", "pre", "test", "min_passed", "wait_seconds", "timeout_hint_seconds"}
-_AGENT_KEYS = {"launch", "status", "running_pattern", "poll_seconds", "max_sessions", "launch_grace_polls"}
+_AGENT_KEYS = {
+    "launch",
+    "status",
+    "running_pattern",
+    "poll_seconds",
+    "max_sessions",
+    "launch_grace_polls",
+    "idle_minutes",
+    "stop",
+}
 
 
 def load_config(run_dir: Path) -> RunConfig:
@@ -84,6 +95,8 @@ def load_config(run_dir: Path) -> RunConfig:
     poll_seconds = _int(agent, "agent", "poll_seconds", 30)
     max_sessions = _int(agent, "agent", "max_sessions", 20)
     launch_grace_polls = _int(agent, "agent", "launch_grace_polls", 4)
+    idle_minutes = _int(agent, "agent", "idle_minutes", 60)
+    stop = _str_list(agent, "agent", "stop", [])
 
     return RunConfig(
         name=name,
@@ -102,6 +115,8 @@ def load_config(run_dir: Path) -> RunConfig:
         poll_seconds=poll_seconds,
         max_sessions=max_sessions,
         launch_grace_polls=launch_grace_polls,
+        idle_minutes=idle_minutes,
+        stop=stop,
     )
 
 

@@ -43,6 +43,8 @@ test = ["pytest", "-q"]  # test command run from the repo root
 # running_pattern = "running"  # substring in status output meaning the agent is alive
 # poll_seconds = 30           # supervisor poll interval
 # max_sessions = 20           # restart limit before giving up
+# idle_minutes = 60           # no commit and no file change this long means stuck
+# stop = []                   # optional command run once when a session looks stuck
 """
 
 _EXAMPLE_ITEMS_MD = """\

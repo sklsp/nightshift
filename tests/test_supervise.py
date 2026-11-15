@@ -35,7 +35,9 @@ _UNTICKED = "- [ ] T1. first item\n- [ ] T2. second item\n"
 _TICKED = "- [x] T1. first item (1 passed in 0.01s)\n- [x] T2. second item (2 passed in 0.01s)\n"
 
 
-def _setup(tmp_path: Path, progress_text: str, max_sessions: int) -> tuple[RunConfig, Path]:
+def _setup(
+    tmp_path: Path, progress_text: str, max_sessions: int, *, idle_minutes=60, stop=None
+) -> tuple[RunConfig, Path]:
     """Build a repo with a progress file and a run dir holding two items."""
     repo = tmp_path / "repo"
     run_dir = tmp_path / "run"
@@ -50,6 +52,8 @@ def _setup(tmp_path: Path, progress_text: str, max_sessions: int) -> tuple[RunCo
         launch=["fake-launch"],
         status=["fake-status"],
         max_sessions=max_sessions,
+        idle_minutes=idle_minutes,
+        stop=list(stop or []),
     )
     return config, run_dir
 
@@ -197,3 +201,80 @@ def test_grace_period_logs_when_agent_never_starts(tmp_path: Path, monkeypatch) 
     assert code == 1
     assert logs.count("agent did not start") == 3
     assert logs[-1] == "agent stuck: no new item done three times in a row; a human should look"
+
+
+def test_changing_fingerprint_never_triggers(tmp_path: Path, monkeypatch) -> None:
+    config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5, idle_minutes=1)
+    clock = Clock()
+    calls = {"n": 0}
+
+    def fake_is_running(cfg: RunConfig) -> bool:
+        calls["n"] += 1
+        if calls["n"] == 4:
+            (config.repo / "PROGRESS-sup.md").write_text(_TICKED, encoding="utf-8")
+        return calls["n"] <= 5
+
+    monkeypatch.setattr(agent_module, "is_running", fake_is_running)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: None)
+    # A fingerprint that changes on every poll, even though the session runs
+    # far longer than idle_minutes.
+    def fingerprint(repo: Path) -> str:
+        return f"fp-{calls['n']}"
+
+    logs: list[str] = []
+    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append, fingerprint=fingerprint)
+
+    assert code == 0
+    assert not any("agent looks stuck" in line for line in logs)
+
+
+def test_unchanged_fingerprint_triggers_and_runs_stop_once(tmp_path: Path, monkeypatch) -> None:
+    config, run_dir = _setup(
+        tmp_path, _UNTICKED, max_sessions=5, idle_minutes=1, stop=["fake-stop"]
+    )
+    clock = Clock()
+    calls = {"n": 0}
+    stops: list[RunConfig] = []
+
+    def fake_is_running(cfg: RunConfig) -> bool:
+        calls["n"] += 1
+        return calls["n"] <= 6
+
+    monkeypatch.setattr(agent_module, "is_running", fake_is_running)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: None)
+    monkeypatch.setattr(agent_module, "stop", lambda cfg: stops.append(cfg))
+
+    logs: list[str] = []
+    code = supervise(
+        config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append, fingerprint=lambda repo: "same"
+    )
+
+    assert code == 1
+    # The stuck session was logged once and stopped exactly once...
+    assert logs.count("agent looks stuck: no commit and no file change for 1 minutes") == 1
+    assert len(stops) == 1
+    # ...and it counted as an empty session, so the three-empty-sessions rule fired.
+    assert logs[-1] == "agent stuck: no new item done three times in a row; a human should look"
+
+
+def test_unchanged_fingerprint_without_stop_only_logs(tmp_path: Path, monkeypatch) -> None:
+    config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=2, idle_minutes=1)
+    clock = Clock()
+    calls = {"n": 0}
+
+    def fake_is_running(cfg: RunConfig) -> bool:
+        calls["n"] += 1
+        return calls["n"] <= 4
+
+    monkeypatch.setattr(agent_module, "is_running", fake_is_running)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: None)
+
+    logs: list[str] = []
+    code = supervise(
+        config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append, fingerprint=lambda repo: "same"
+    )
+
+    assert code == 1
+    # Without a stop command the supervisor only reports and lets the session end.
+    assert logs.count("agent looks stuck: no commit and no file change for 1 minutes") == 1
+    assert "stopped after 2 sessions" in logs[-1]

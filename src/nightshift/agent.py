@@ -48,3 +48,10 @@ def is_running(config: RunConfig) -> bool:
         print(f"agent status command exited with code {result.returncode}", file=sys.stderr)
         return False
     return re.search(config.running_pattern, result.stdout) is not None
+
+
+def stop(config: RunConfig) -> None:
+    """Run the configured stop command once, or do nothing when it is empty."""
+    if not config.stop:
+        return
+    subprocess.run(list(config.stop), cwd=config.repo, stdin=subprocess.DEVNULL)

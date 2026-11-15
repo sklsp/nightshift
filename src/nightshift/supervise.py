@@ -1,5 +1,13 @@
-"""Supervise an agent: relaunch it when a session ends until every item is done."""
+"""Supervise an agent: relaunch it when a session ends until every item is done.
 
+A stuck detector exists because of a real failure: one session spent hours
+re-reading the same files after its context was compacted, writing nothing.
+While the agent runs, the supervisor fingerprints the repo (HEAD plus git
+status) on every poll; if it does not change for idle_minutes the session is
+reported as stuck and, when configured, stopped.
+"""
+
+import subprocess
 import time
 from pathlib import Path
 
@@ -9,7 +17,37 @@ from nightshift.items import load_items
 from nightshift.progress import read_progress
 
 
-def supervise(config: RunConfig, run_dir: Path, *, sleep=time.sleep, now=time.time, log=print) -> int:
+def _repo_fingerprint(repo: Path) -> str | None:
+    """Return HEAD's hash plus git status porcelain text, or None when git cannot answer."""
+    try:
+        head = subprocess.run(
+            ["git", "-C", str(repo), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            stdin=subprocess.DEVNULL,
+        )
+        status = subprocess.run(
+            ["git", "-C", str(repo), "status", "--porcelain"],
+            capture_output=True,
+            text=True,
+            stdin=subprocess.DEVNULL,
+        )
+    except OSError:
+        return None
+    if head.returncode != 0 or status.returncode != 0:
+        return None
+    return f"{head.stdout.strip()}\n{status.stdout}"
+
+
+def supervise(
+    config: RunConfig,
+    run_dir: Path,
+    *,
+    sleep=time.sleep,
+    now=time.time,
+    log=print,
+    fingerprint=_repo_fingerprint,
+) -> int:
     """Relaunch the agent until every item is done or a stop condition hits."""
     total = len(load_items(run_dir))
     progress_path = config.repo / f"PROGRESS-{config.name}.md"
@@ -42,9 +80,27 @@ def supervise(config: RunConfig, run_dir: Path, *, sleep=time.sleep, now=time.ti
                     break
             if not started:
                 log("agent did not start")
+        last_fp = None
+        fp_since = now()
+        stuck_reported = False
         while True:
             if not _status():
                 break
+            fp = fingerprint(config.repo)
+            if fp is not None and fp != last_fp:
+                last_fp = fp
+                fp_since = now()
+                stuck_reported = False
+            if (
+                fp is not None
+                and not stuck_reported
+                and now() - fp_since >= config.idle_minutes * 60
+            ):
+                log(f"agent looks stuck: no commit and no file change for {config.idle_minutes} minutes")
+                stuck_reported = True
+                agent.stop(config)
+                while _status():
+                    pass
         progress = read_progress(progress_path, config.prefix)
         log(f"session {session} ended: {len(progress.done)}/{total} done, {len(progress.blocked)} blocked")
         if progress.finished:

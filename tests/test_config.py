@@ -47,6 +47,8 @@ running_pattern = "is running"
 poll_seconds = 10
 max_sessions = 5
 launch_grace_polls = 2
+idle_minutes = 5
+stop = ["lms", "stop"]
 """,
     )
     cfg = load_config(tmp_path)
@@ -67,6 +69,8 @@ launch_grace_polls = 2
     assert cfg.poll_seconds == 10
     assert cfg.max_sessions == 5
     assert cfg.launch_grace_polls == 2
+    assert cfg.idle_minutes == 5
+    assert cfg.stop == ["lms", "stop"]
 
 
 def test_defaults_when_optional_keys_missing(tmp_path: Path) -> None:
@@ -85,6 +89,8 @@ def test_defaults_when_optional_keys_missing(tmp_path: Path) -> None:
     assert cfg.poll_seconds == 30
     assert cfg.max_sessions == 20
     assert cfg.launch_grace_polls == 4
+    assert cfg.idle_minutes == 60
+    assert cfg.stop == []
 
 
 def test_relative_repo_resolved_against_run_dir(tmp_path: Path) -> None:
