@@ -14,6 +14,7 @@ from nightshift.agent import AgentError
 from nightshift.commits import CommitError, commit_report
 from nightshift.config import ConfigError, RunConfig, load_config
 from nightshift.gate import clean, file, last_gate_line, start, state, wait
+from nightshift.git import run_git
 from nightshift.items import ItemsError, load_items
 from nightshift.progress import Progress, read_progress
 from nightshift.render import RenderError, render_run
@@ -292,12 +293,7 @@ def _repo_check(repo: Path) -> tuple[bool, str] | None:
 def _branch_check(repo: Path, wanted: str) -> tuple[bool, str]:
     """Check that repo sits on the branch named by the run; return (ok, problem)."""
     try:
-        result = subprocess.run(
-            ["git", "-C", str(repo), "branch", "--show-current"],
-            capture_output=True,
-            text=True,
-            stdin=subprocess.DEVNULL,
-        )
+        result = run_git(repo, "branch", "--show-current")
     except FileNotFoundError:
         return False, "install git or put it on PATH"
     actual = result.stdout.strip() if result.returncode == 0 else ""

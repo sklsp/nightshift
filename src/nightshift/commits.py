@@ -1,11 +1,11 @@
 """Check that a run's history has exactly one well-formed commit per item."""
 
 import re
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
 from nightshift.config import RunConfig
+from nightshift.git import run_git
 from nightshift.items import Item
 
 
@@ -22,23 +22,13 @@ class Commit:
     body: str
 
 
-def _run_git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
-    """Run one git command inside repo and capture its output."""
-    return subprocess.run(
-        ["git", "-C", str(repo), *args],
-        capture_output=True,
-        text=True,
-        stdin=subprocess.DEVNULL,
-    )
-
-
 def resolve_base(config: RunConfig) -> str | None:
     """Return the default range base: merge-base with run.branch when set, else the first commit."""
     if config.branch:
-        result = _run_git(config.repo, "merge-base", config.branch, "HEAD")
+        result = run_git(config.repo, "merge-base", config.branch, "HEAD")
         if result.returncode == 0 and result.stdout.strip():
             return result.stdout.strip()
-    root = _run_git(config.repo, "rev-list", "--max-parents=0", "HEAD")
+    root = run_git(config.repo, "rev-list", "--max-parents=0", "HEAD")
     if root.returncode != 0 or not root.stdout.strip():
         return None
     return root.stdout.splitlines()[0].strip()
@@ -46,7 +36,7 @@ def resolve_base(config: RunConfig) -> str | None:
 
 def read_commits(repo: Path, base: str) -> list[Commit]:
     """Return the commits in git log <base>..HEAD, newest first."""
-    result = _run_git(repo, "log", f"{base}..HEAD", "--pretty=format:%x01%H%x02%s%x03%b")
+    result = run_git(repo, "log", f"{base}..HEAD", "--pretty=format:%x01%H%x02%s%x03%b")
     if result.returncode != 0:
         raise CommitError(f"git log failed: {result.stderr.strip()}")
     commits: list[Commit] = []
