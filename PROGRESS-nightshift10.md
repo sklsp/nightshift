@@ -1,3 +1,0 @@
-- [x] M1. typing: mypy strict, in CI (195 passed in 15.50s)
-- [x] M2. git: one module for the git calls (199 passed in 16.40s)
-- [x] M3. release: 0.9.1 (199 passed in 15.68s)

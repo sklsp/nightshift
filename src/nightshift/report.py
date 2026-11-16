@@ -1,10 +1,10 @@
 """Build a markdown summary of a finished run for a pull request body."""
 
-import subprocess
 from pathlib import Path
 
 from nightshift.config import load_config
 from nightshift.gate import last_gate_line
+from nightshift.git import run_git
 from nightshift.items import load_items
 from nightshift.progress import read_progress
 
@@ -83,12 +83,7 @@ def _format_minutes(seconds: int) -> str:
 def _commit_lines(repo: Path) -> list[tuple[str, int, str]]:
     """Return (hash, unix time, subject) for every commit of repo, newest first; empty when git is missing."""
     try:
-        result = subprocess.run(
-            ["git", "-C", str(repo), "log", "--format=%h %ct %s"],
-            capture_output=True,
-            text=True,
-            stdin=subprocess.DEVNULL,
-        )
+        result = run_git(repo, "log", "--format=%h %ct %s")
     except FileNotFoundError:
         return []
     if result.returncode != 0 or not result.stdout.strip():

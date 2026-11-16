@@ -4,7 +4,6 @@ import argparse
 import json
 import re
 import shutil
-import subprocess
 import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -277,12 +276,7 @@ def _repo_check(repo: Path) -> tuple[bool, str] | None:
     if not repo.is_dir():
         return False, f"create the repo folder {repo}"
     try:
-        result = subprocess.run(
-            ["git", "-C", str(repo), "rev-parse", "--is-inside-work-tree"],
-            capture_output=True,
-            text=True,
-            stdin=subprocess.DEVNULL,
-        )
+        result = run_git(repo, "rev-parse", "--is-inside-work-tree")
     except FileNotFoundError:
         return None
     if result.returncode == 0 and result.stdout.strip() == "true":
@@ -470,13 +464,7 @@ def _status_payload(
 def _commit_dicts(repo: Path) -> list[dict[str, str]] | None:
     """Return the last five commits of repo as {hash, subject}, or None when git is unavailable."""
     try:
-        result = subprocess.run(
-            ["git", "log", "-5", "--format=%h %s"],
-            cwd=repo,
-            capture_output=True,
-            text=True,
-            stdin=subprocess.DEVNULL,
-        )
+        result = run_git(repo, "log", "-5", "--format=%h %s")
     except FileNotFoundError:
         return None
     if result.returncode != 0 or not result.stdout.strip():
