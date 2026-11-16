@@ -20,6 +20,7 @@ from nightshift.render import RenderError, render_run
 from nightshift.report import build_report, format_minutes
 from nightshift.status import current_item_seconds
 from nightshift.supervise import read_supervisor_events, supervise
+from nightshift.watch import watch
 
 _EXAMPLE_RUN_TOML = """\
 # nightshift run configuration. Every key is shown below; the required keys
@@ -94,6 +95,15 @@ def build_parser() -> argparse.ArgumentParser:
     status_parser.add_argument("run_dir", type=Path, help="path of an existing run directory")
     status_parser.add_argument("--json", action="store_true", help="print the summary as one JSON object")
 
+    watch_parser = subparsers.add_parser(
+        "watch", help="print new commits and supervisor events as they appear"
+    )
+    watch_parser.add_argument("run_dir", type=Path, help="path of an existing run directory")
+    watch_parser.add_argument(
+        "--every", type=float, default=20.0, help="seconds between polls (default 20, at least 1)"
+    )
+    watch_parser.add_argument("--once", action="store_true", help="print what exists now and exit")
+
     doctor_parser = subparsers.add_parser(
         "doctor", help="check that the run dir is ready for an unattended run"
     )
@@ -148,6 +158,8 @@ def main(argv: list[str] | None = None) -> int:
         return _queue(args.run_dirs)
     if args.command == "status":
         return _status(args.run_dir, as_json=args.json)
+    if args.command == "watch":
+        return _watch(args.run_dir, every=args.every, once=args.once)
     if args.command == "doctor":
         return _doctor(args.run_dir)
     if args.command == "report":
@@ -416,6 +428,16 @@ def _status(run_dir: Path, as_json: bool = False) -> int:
     _print_commits(config.repo)
     _print_supervisor_events(run_dir)
     return 0
+
+
+def _watch(run_dir: Path, every: float = 20.0, once: bool = False) -> int:
+    """Load config and print new commits and supervisor events until the run is finished."""
+    try:
+        config = load_config(run_dir)
+    except ConfigError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    return watch(config, run_dir, every=every, once=once)
 
 
 def _next_title(progress_path: Path, prefix: str, number: int) -> str | None:
