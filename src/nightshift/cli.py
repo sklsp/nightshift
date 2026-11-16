@@ -17,7 +17,8 @@ from nightshift.git import run_git
 from nightshift.items import ItemsError, load_items
 from nightshift.progress import Progress, read_progress
 from nightshift.render import RenderError, render_run
-from nightshift.report import build_report
+from nightshift.report import build_report, format_minutes
+from nightshift.status import current_item_seconds
 from nightshift.supervise import read_supervisor_events, supervise
 
 _EXAMPLE_RUN_TOML = """\
@@ -407,6 +408,10 @@ def _status(run_dir: Path, as_json: bool = False) -> int:
         suffix = f" {title}" if title else ""
         print(f"next: {config.prefix}{progress.next_item}{suffix}")
 
+    seconds = current_item_seconds(run_dir, config, progress)
+    if progress.next_item is not None and seconds is not None:
+        print(f"on {config.prefix}{progress.next_item} for {format_minutes(seconds)}")
+
     print(last_gate_line(run_dir))
     _print_commits(config.repo)
     _print_supervisor_events(run_dir)
@@ -432,6 +437,7 @@ def _status_payload(
         next_title: str | None = None
     else:
         next_title = _next_title(progress_path, config.prefix, next_item)
+    seconds = current_item_seconds(run_dir, config, progress)
     return {
         "name": config.name,
         "total": progress.total,
@@ -439,6 +445,8 @@ def _status_payload(
         "blocked": list(progress.blocked),
         "next_item": next_item,
         "next_title": next_title,
+        # whole minutes on the current item, same rounding as report.format_minutes
+        "current_minutes": None if seconds is None else (seconds + 30) // 60,
         "gate": state(run_dir),
         "commits": _commit_dicts(config.repo) or [],
         "events": read_supervisor_events(run_dir)[-5:],

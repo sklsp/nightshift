@@ -109,7 +109,8 @@ def test_status_json_with_progress(tmp_path: Path, capsys: pytest.CaptureFixture
     assert main(["status", str(run_dir), "--json"]) == 0
     payload = json.loads(capsys.readouterr().out)
     assert set(payload) == {
-        "name", "total", "done", "blocked", "next_item", "next_title", "gate", "commits", "events"
+        "name", "total", "done", "blocked", "next_item", "next_title", "current_minutes",
+        "gate", "commits", "events"
     }
     assert payload["name"] == "st"
     assert payload["total"] == 3
@@ -123,6 +124,7 @@ def test_status_json_with_progress(tmp_path: Path, capsys: pytest.CaptureFixture
     assert commits[0]["subject"] == "first commit"
     assert len(commits[0]["hash"]) > 0
     assert payload["events"] == []
+    assert payload["current_minutes"] is None
 
 
 def test_status_json_fresh_run(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -133,7 +135,8 @@ def test_status_json_fresh_run(tmp_path: Path, capsys: pytest.CaptureFixture[str
     assert main(["status", str(run_dir), "--json"]) == 0
     payload = json.loads(capsys.readouterr().out)
     assert set(payload) == {
-        "name", "total", "done", "blocked", "next_item", "next_title", "gate", "commits", "events"
+        "name", "total", "done", "blocked", "next_item", "next_title", "current_minutes",
+        "gate", "commits", "events"
     }
     assert payload["name"] == "st"
     assert payload["total"] == 0
@@ -143,6 +146,7 @@ def test_status_json_fresh_run(tmp_path: Path, capsys: pytest.CaptureFixture[str
     assert payload["next_title"] is None
     assert payload["gate"] == "none"
     assert payload["commits"] == []
+    assert payload["current_minutes"] is None
     assert payload["events"] == []
 
 

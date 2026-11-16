@@ -49,3 +49,19 @@ def fingerprint(repo: Path) -> str | None:
     if head.returncode != 0 or status.returncode != 0:
         return None
     return f"{head.stdout.strip()}\n{status.stdout}"
+
+
+def commit_log(repo: Path) -> list[tuple[str, int, str]]:
+    """Return (hash, unix time, subject) for every commit of repo, newest first; empty when git is missing."""
+    try:
+        result = run_git(repo, "log", "--format=%h %ct %s")
+    except OSError:
+        return []
+    if result.returncode != 0:
+        return []
+    lines: list[tuple[str, int, str]] = []
+    for line in result.stdout.splitlines():
+        short_hash, rest = line.split(" ", 1)
+        unix_time, subject = rest.split(" ", 1)
+        lines.append((short_hash, int(unix_time), subject))
+    return lines

@@ -4,7 +4,7 @@ from pathlib import Path
 
 from nightshift.config import load_config
 from nightshift.gate import last_gate_line
-from nightshift.git import run_git
+from nightshift.git import commit_log
 from nightshift.items import load_items
 from nightshift.progress import read_progress
 from nightshift.supervise import read_supervisor_events
@@ -23,7 +23,7 @@ def build_report(run_dir: Path) -> str:
     items = load_items(run_dir)
     progress_path = config.repo / f"PROGRESS-{config.name}.md"
     progress = read_progress(progress_path, config.prefix)
-    commits = _commit_lines(config.repo)
+    commits = commit_log(config.repo)
 
     lines: list[str] = [f"# {config.name}: {len(progress.done)}/{progress.total} items"]
     committed_times: list[int] = []
@@ -39,13 +39,13 @@ def build_report(run_dir: Path) -> str:
                 commit_hash, commit_time = found
                 state_text = commit_hash
                 if committed_times:
-                    state_text += f" ({_format_minutes(commit_time - committed_times[-1])})"
+                    state_text += f" ({format_minutes(commit_time - committed_times[-1])})"
                 committed_times.append(commit_time)
         lines.append(f"- {marker} {item.title}: {state_text}")
 
     if len(committed_times) >= 2:
         run_seconds = committed_times[-1] - committed_times[0]
-        lines.append(f"run time: {_format_minutes(run_seconds)} (first to last item commit)")
+        lines.append(f"run time: {format_minutes(run_seconds)} (first to last item commit)")
     gate_line = last_gate_line(run_dir)
     if gate_line != "last gate: none":
         lines.append(gate_line)
@@ -95,29 +95,13 @@ def _supervisor_lines(run_dir: Path) -> list[str]:
     return lines
 
 
-def _format_minutes(seconds: int) -> str:
+def format_minutes(seconds: int) -> str:
     """Format a duration rounded to whole minutes, like '38 min' or '1 h 12 min'."""
     total = (seconds + 30) // 60
     if total < 60:
         return f"{total} min"
     hours, rest = divmod(total, 60)
     return f"{hours} h {rest} min"
-
-
-def _commit_lines(repo: Path) -> list[tuple[str, int, str]]:
-    """Return (hash, unix time, subject) for every commit of repo, newest first; empty when git is missing."""
-    try:
-        result = run_git(repo, "log", "--format=%h %ct %s")
-    except FileNotFoundError:
-        return []
-    if result.returncode != 0 or not result.stdout.strip():
-        return []
-    triples: list[tuple[str, int, str]] = []
-    for line in result.stdout.rstrip("\n").splitlines():
-        commit_hash, _, rest = line.partition(" ")
-        unix_time_text, _, subject = rest.partition(" ")
-        triples.append((commit_hash, int(unix_time_text), subject))
-    return triples
 
 
 def _find_commit(commits: list[tuple[str, int, str]], prefix: str) -> tuple[str, int] | None:
