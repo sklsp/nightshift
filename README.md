@@ -2,6 +2,9 @@
 
 nightshift runs a local LLM coding agent unattended: you write one item per spec file, and the agent works through them in order while nobody watches. It renders the run files from a small config plus an items list, gives the agent a test gate that fits inside a 30 second command limit, and supervises the agent by relaunching it when a session ends. In the morning you get one commit per item and a progress file with the last pytest line next to each tick.
 
+docs/ARCHITECTURE.md explains how nightshift works inside: the life of a run, every module and the supervisor's rules.
+
+
 ## Install
 
 ```

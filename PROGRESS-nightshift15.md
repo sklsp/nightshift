@@ -1,4 +1,4 @@
 # Progress: nightshift 15
 
-- [ ] S1. docs: ARCHITECTURE.md from the code
+- [x] S1. docs: ARCHITECTURE.md from the code (238 passed in 18.24s)
 - [ ] S2. release 0.12.2
