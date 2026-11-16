@@ -1,6 +1,6 @@
 # Progress: nightshift run 8
 
 - [x] K1. supervise: a timestamped event log (174 passed in 11.42s)
-- [ ] K2. status: the supervisor's last events
+- [x] K2. status: the supervisor's last events (178 passed in 11.21s)
 - [ ] K3. report: minutes per item
 - [ ] K4. docs and release 0.8.0

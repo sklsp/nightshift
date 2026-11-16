@@ -335,6 +335,33 @@ def _gate(args: argparse.Namespace) -> int:
     return file(config, args.run_dir, args.test_file, args.module)
 
 
+def _supervisor_events(run_dir: Path) -> list[dict[str, str]]:
+    """Return the last five supervisor events from .gate/supervise.jsonl, skipping bad lines."""
+    path = run_dir / ".gate" / "supervise.jsonl"
+    if not path.is_file():
+        return []
+    events: list[dict[str, str]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(event, dict) and "t" in event and "msg" in event:
+            events.append({"t": str(event["t"]), "msg": str(event["msg"])})
+    return events[-5:]
+
+
+def _print_supervisor_events(run_dir: Path) -> None:
+    """Print the last five supervisor events as '  HH:MM:SS <msg>', or nothing when there are none."""
+    events = _supervisor_events(run_dir)
+    if not events:
+        return
+    print("Supervisor:")
+    for event in events:
+        time_part = event["t"].rsplit("T", 1)[-1]
+        print(f"  {time_part} {event['msg']}")
+
+
 def _status(run_dir: Path, as_json: bool = False) -> int:
     """Print a one-screen summary of the run and exit 0."""
     try:
@@ -365,6 +392,7 @@ def _status(run_dir: Path, as_json: bool = False) -> int:
 
     print(last_gate_line(run_dir))
     _print_commits(config.repo)
+    _print_supervisor_events(run_dir)
     return 0
 
 
@@ -396,6 +424,7 @@ def _status_payload(
         "next_title": next_title,
         "gate": state(run_dir),
         "commits": _commit_dicts(config.repo) or [],
+        "events": _supervisor_events(run_dir),
     }
 
 

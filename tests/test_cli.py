@@ -97,7 +97,7 @@ def test_status_json_with_progress(tmp_path: Path, capsys: pytest.CaptureFixture
     assert main(["status", str(run_dir), "--json"]) == 0
     payload = json.loads(capsys.readouterr().out)
     assert set(payload) == {
-        "name", "total", "done", "blocked", "next_item", "next_title", "gate", "commits"
+        "name", "total", "done", "blocked", "next_item", "next_title", "gate", "commits", "events"
     }
     assert payload["name"] == "st"
     assert payload["total"] == 3
@@ -110,6 +110,7 @@ def test_status_json_with_progress(tmp_path: Path, capsys: pytest.CaptureFixture
     assert len(commits) == 1
     assert commits[0]["subject"] == "first commit"
     assert len(commits[0]["hash"]) > 0
+    assert payload["events"] == []
 
 
 def test_status_json_fresh_run(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -120,7 +121,7 @@ def test_status_json_fresh_run(tmp_path: Path, capsys: pytest.CaptureFixture[str
     assert main(["status", str(run_dir), "--json"]) == 0
     payload = json.loads(capsys.readouterr().out)
     assert set(payload) == {
-        "name", "total", "done", "blocked", "next_item", "next_title", "gate", "commits"
+        "name", "total", "done", "blocked", "next_item", "next_title", "gate", "commits", "events"
     }
     assert payload["name"] == "st"
     assert payload["total"] == 0
@@ -130,6 +131,7 @@ def test_status_json_fresh_run(tmp_path: Path, capsys: pytest.CaptureFixture[str
     assert payload["next_title"] is None
     assert payload["gate"] == "none"
     assert payload["commits"] == []
+    assert payload["events"] == []
 
 
 def test_version_flag_prints_version_and_exits_zero(capsys: pytest.CaptureFixture[str]) -> None:
@@ -221,3 +223,88 @@ def test_build_reports_bad_config_on_stderr(tmp_path: Path, capsys: pytest.Captu
     err = capsys.readouterr().err
     assert "error:" in err
     assert "run.name" in err
+
+
+def _write_events(run_dir: Path, lines: list[str]) -> None:
+    """Write .gate/supervise.jsonl with the given raw lines."""
+    gate_dir = run_dir / ".gate"
+    gate_dir.mkdir(exist_ok=True)
+    (gate_dir / "supervise.jsonl").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def _seven_event_lines() -> list[str]:
+    """Seven supervisor event lines, one per minute from 23:00."""
+    return [json.dumps({"t": f"2026-11-15T23:{i:02d}:00", "msg": f"event {i + 1}"}) for i in range(7)]
+
+
+def test_status_prints_last_five_supervisor_events(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    run_dir = _make_run(tmp_path, repo)
+    _write_events(run_dir, _seven_event_lines())
+
+    assert main(["status", str(run_dir)]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    # Of the seven events only the last five show, after everything status printed before.
+    assert lines[-6:] == [
+        "Supervisor:",
+        "  23:02:00 event 3",
+        "  23:03:00 event 4",
+        "  23:04:00 event 5",
+        "  23:05:00 event 6",
+        "  23:06:00 event 7",
+    ]
+
+
+def test_status_json_includes_last_five_supervisor_events(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    run_dir = _make_run(tmp_path, repo)
+    _write_events(run_dir, _seven_event_lines())
+
+    assert main(["status", str(run_dir), "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["events"] == [
+        {"t": "2026-11-15T23:02:00", "msg": "event 3"},
+        {"t": "2026-11-15T23:03:00", "msg": "event 4"},
+        {"t": "2026-11-15T23:04:00", "msg": "event 5"},
+        {"t": "2026-11-15T23:05:00", "msg": "event 6"},
+        {"t": "2026-11-15T23:06:00", "msg": "event 7"},
+    ]
+
+
+def test_status_without_events_prints_nothing_extra(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    run_dir = _make_run(tmp_path, repo)
+
+    assert main(["status", str(run_dir)]) == 0
+    out = capsys.readouterr().out
+    assert "Supervisor:" not in out
+
+    assert main(["status", str(run_dir), "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["events"] == []
+
+
+def test_status_skips_bad_supervisor_event_lines(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    run_dir = _make_run(tmp_path, repo)
+    lines = _seven_event_lines()
+    lines[2] = "{not json"
+    _write_events(run_dir, lines)
+
+    assert main(["status", str(run_dir)]) == 0
+    out_lines = capsys.readouterr().out.splitlines()
+    # The bad line is skipped; of the six good events only the last five show.
+    assert out_lines[-6:] == [
+        "Supervisor:",
+        "  23:01:00 event 2",
+        "  23:03:00 event 4",
+        "  23:04:00 event 5",
+        "  23:05:00 event 6",
+        "  23:06:00 event 7",
+    ]
