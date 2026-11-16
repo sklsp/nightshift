@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+import nightshift.cli as cli_module
 from nightshift.cli import main
 
 
@@ -20,6 +21,17 @@ def _make_run(tmp_path: Path, repo: Path, test: list[str] | None = None) -> Path
     run_dir.mkdir()
     (run_dir / "run.toml").write_text(
         f'[run]\nname = "st"\nrepo = "{repo.as_posix()}"\nprefix = "N"\n[check]\ntest = {test!r}\n',
+        encoding="utf-8",
+    )
+    return run_dir
+
+
+def _queue_run(base: Path, repo: Path, n: int) -> Path:
+    """Create a minimal numbered run dir for queue tests; supervise is always faked."""
+    run_dir = base / f"run{n}"
+    run_dir.mkdir()
+    (run_dir / "run.toml").write_text(
+        f'[run]\nname = "st"\nrepo = "{repo.as_posix()}"\nprefix = "N"\n[check]\ntest = ["pytest"]\n',
         encoding="utf-8",
     )
     return run_dir
@@ -362,4 +374,77 @@ def test_doctor_skips_branch_check_when_unset(tmp_path: Path, capsys: pytest.Cap
     out = capsys.readouterr().out
     assert "ok: branch" not in out
     assert "problem: branch" not in out
+
+
+def test_queue_runs_every_run_when_all_pass(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    first = _queue_run(tmp_path, repo, 1)
+    second = _queue_run(tmp_path, repo, 2)
+    ran: list[Path] = []
+
+    def fake_supervise(config: object, run_dir: Path) -> int:
+        ran.append(run_dir)
+        return 0
+
+    monkeypatch.setattr(cli_module, "supervise", fake_supervise)
+
+    assert main(["queue", str(first), str(second)]) == 0
+    out = capsys.readouterr().out.splitlines()
+    assert ran == [first, second]
+    assert out[-3:] == [
+        f"queue: {first} finished with 0",
+        f"queue: {second} finished with 0",
+        "queue: all 2 runs finished",
+    ]
+
+
+def test_queue_stops_at_the_first_failed_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    first = _queue_run(tmp_path, repo, 1)
+    second = _queue_run(tmp_path, repo, 2)
+    third = _queue_run(tmp_path, repo, 3)
+    codes = iter([0, 1])
+    ran: list[Path] = []
+
+    def fake_supervise(config: object, run_dir: Path) -> int:
+        ran.append(run_dir)
+        return next(codes)
+
+    monkeypatch.setattr(cli_module, "supervise", fake_supervise)
+
+    assert main(["queue", str(first), str(second), str(third)]) == 1
+    out = capsys.readouterr().out.splitlines()
+    assert ran == [first, second]
+    assert out[-2:] == [
+        f"queue: {first} finished with 0",
+        f"queue: {second} finished with 1",
+    ]
+    assert "all 3 runs finished" not in out
+
+
+def test_queue_missing_run_dir_stops_before_anything(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    first = _queue_run(tmp_path, repo, 1)
+    missing = tmp_path / "nope"
+    ran: list[Path] = []
+
+    def fake_supervise(config: object, run_dir: Path) -> int:
+        ran.append(run_dir)
+        return 0
+
+    monkeypatch.setattr(cli_module, "supervise", fake_supervise)
+
+    assert main(["queue", str(first), str(missing)]) == 2
+    err = capsys.readouterr().err
+    assert not ran
+    assert f"error: {missing} does not exist or has no run.toml" in err
 

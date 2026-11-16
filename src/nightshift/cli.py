@@ -84,6 +84,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     supervise_parser.add_argument("run_dir", type=Path, help="path of an existing run directory")
 
+    queue_parser = subparsers.add_parser(
+        "queue", help="supervise several run dirs back to back, in order"
+    )
+    queue_parser.add_argument("run_dirs", nargs="+", type=Path, help="run directories, supervised in order")
+
     status_parser = subparsers.add_parser("status", help="print a one-screen summary of the run")
     status_parser.add_argument("run_dir", type=Path, help="path of an existing run directory")
     status_parser.add_argument("--json", action="store_true", help="print the summary as one JSON object")
@@ -138,6 +143,8 @@ def main(argv: list[str] | None = None) -> int:
         return _build(args.run_dir)
     if args.command == "supervise":
         return _supervise(args.run_dir)
+    if args.command == "queue":
+        return _queue(args.run_dirs)
     if args.command == "status":
         return _status(args.run_dir, as_json=args.json)
     if args.command == "doctor":
@@ -193,6 +200,21 @@ def _supervise(run_dir: Path) -> int:
     except (ConfigError, ItemsError, AgentError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
+
+
+def _queue(run_dirs: list[Path]) -> int:
+    """Supervise each run dir in order; stop at the first non-zero code."""
+    for run_dir in run_dirs:
+        if not run_dir.is_dir() or not (run_dir / "run.toml").is_file():
+            print(f"error: {run_dir} does not exist or has no run.toml", file=sys.stderr)
+            return 2
+    for run_dir in run_dirs:
+        code = _supervise(run_dir)
+        print(f"queue: {run_dir} finished with {code}")
+        if code != 0:
+            return code
+    print(f"queue: all {len(run_dirs)} runs finished")
+    return 0
 
 
 def _doctor(run_dir: Path) -> int:
