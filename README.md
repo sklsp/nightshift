@@ -37,6 +37,8 @@ Python 3.11 or newer; no other dependencies. This puts `nightshift` on your PATH
     nightshift commits myrun         # check that each item has exactly one well-formed commit
    ```
 
+The supervisor survives a machine that refuses to start processes: an unreadable status is treated as unknown and a failed launch is retried with backoff; see `agent.launch_backoff_seconds` and `agent.max_launch_failures` in the config reference.
+
 ## The gate
 
 Agent terminals kill any command that runs longer than about 30 seconds. The gate starts a check in a detached process instead; each call returns within the limit and picks the result up from files:

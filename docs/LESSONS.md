@@ -37,3 +37,6 @@ When an agent rewrites a docstring or comment it tends to drop the design reason
 
 ## Notes files are append-only
 BUGS.md, IDEAS.md and BLOCKED.md only grow. A session that rewrites or shortens one silently loses history; in a real run a bug report disappeared when an agent tidied the file. Add lines, never rewrite.
+
+## The machine can fail, not only the agent
+In Sparton run 13 the machine itself failed late in the night: Windows refused to start new processes for a while, and every process creation came back with exit code 3221225794 (0xC0000142, STATUS_DLL_INIT_FAILED). The agent launch failed and so did the status command, so the supervisor saw three sessions that never started, counted them as empty, and gave up with a false "agent stuck" although nothing was wrong with the agent. Two rules came from it: an unreadable status is unknown, not stopped (the supervisor keeps polling instead of ending the session), and a failed launch is retried after a backoff that doubles each time; it never counts as an empty session, and only six consecutive failed starts end the run.
