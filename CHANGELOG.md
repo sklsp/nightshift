@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.13.0
+
+- tests: new test_end_to_end.py drives a real supervisor against the fake agent as a subprocess: it launches the agent, watches it commit three items in order and exits with code 0 when every item is ticked; README notes it under the architecture link
+- supervise: an agent that finishes before any poll sees it running now ends its session normally instead of being counted as a failed start; found by the new end to end test
+- release: version 0.13.0 and this changelog
+
 ## 0.12.3
 
 - tests: new test_packaging.py builds a wheel of the repo through the PEP 517 hook without the network and checks it holds both templates, every module and an entry_points.txt with nightshift = nightshift.cli:main; setuptools joins the dev extras and .gitignore lists build/
