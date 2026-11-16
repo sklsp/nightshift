@@ -1,6 +1,8 @@
 """Tests for the supervise loop."""
 
 import json
+import os
+import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -8,7 +10,7 @@ from pathlib import Path
 import nightshift.agent as agent_module
 from nightshift.cli import main
 from nightshift.config import RunConfig
-from nightshift.supervise import supervise
+from nightshift.supervise import _pid_alive, supervise
 
 
 class Clock:
@@ -624,3 +626,92 @@ def test_unwritable_gate_does_not_stop_the_supervisor(tmp_path: Path, monkeypatc
     # The supervisor kept running and logging even though .gate cannot hold the event log or the progress copy.
     assert "agent did not start" in logs
     assert logs[-1] == "stopped after 1 sessions without finishing; a human should look"
+
+
+def _git_init(repo: Path) -> None:
+    """Make repo a git repository so the supervisor lock has a home."""
+    subprocess.run(
+        ["git", "init", "-q"], cwd=repo, check=True, capture_output=True, text=True, stdin=subprocess.DEVNULL
+    )
+
+
+def test_pid_alive_reports_the_current_process() -> None:
+    assert _pid_alive(os.getpid())
+
+
+def test_lock_exists_during_run_and_is_removed_after(tmp_path: Path, monkeypatch) -> None:
+    config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5)
+    _git_init(config.repo)
+    lock_path = config.repo / ".git" / "nightshift-supervise.lock"
+    clock = Clock()
+    calls = {"n": 0}
+    seen: dict[str, bool] = {}
+
+    def fake_is_running(cfg: RunConfig, quiet: bool = False) -> bool:
+        calls["n"] += 1
+        if calls["n"] == 3:
+            # We are still inside supervise(); the lock must be held right now.
+            seen["during"] = lock_path.is_file()
+            (cfg.repo / "PROGRESS-sup.md").write_text(_TICKED, encoding="utf-8")
+        return calls["n"] in (2, 3)
+
+    monkeypatch.setattr(agent_module, "is_running", fake_is_running)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
+
+    logs: list[str] = []
+    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+
+    assert code == 0
+    assert seen["during"] is True
+    assert not lock_path.exists()
+
+
+def test_live_lock_refuses_to_start(tmp_path: Path, monkeypatch) -> None:
+    config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5)
+    _git_init(config.repo)
+    other_pid = 4242  # any pid: the injected alive fake says it is running
+    (config.repo / ".git" / "nightshift-supervise.lock").write_text(
+        json.dumps({"pid": other_pid, "run": str(run_dir)}), encoding="utf-8"
+    )
+    clock = Clock()
+    launches: list[str] = []
+
+    monkeypatch.setattr(agent_module, "is_running", lambda cfg, quiet=False: False)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: launches.append(message))
+
+    logs: list[str] = []
+    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append, alive=lambda pid: True)
+
+    assert code == 2
+    # The supervisor must refuse before doing anything else.
+    assert not launches
+    assert logs == [f"another supervisor (pid {other_pid}) is running {str(run_dir)}; refusing to start"]
+
+
+def test_stale_lock_is_removed_and_taken_over(tmp_path: Path, monkeypatch) -> None:
+    config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5)
+    lock_path = config.repo / ".git" / "nightshift-supervise.lock"
+    dead_pid = 4243  # any pid: the injected alive fake says it is gone
+    _git_init(config.repo)
+    lock_path.write_text(json.dumps({"pid": dead_pid, "run": str(run_dir)}), encoding="utf-8")
+    clock = Clock()
+    calls = {"n": 0}
+    seen: dict[str, int] = {}
+
+    def fake_is_running(cfg: RunConfig, quiet: bool = False) -> bool:
+        calls["n"] += 1
+        if calls["n"] == 3:
+            # The stale lock must have been replaced with our own pid by now.
+            seen["pid"] = json.loads(lock_path.read_text(encoding="utf-8"))["pid"]
+            (cfg.repo / "PROGRESS-sup.md").write_text(_TICKED, encoding="utf-8")
+        return calls["n"] in (2, 3)
+
+    monkeypatch.setattr(agent_module, "is_running", fake_is_running)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
+
+    logs: list[str] = []
+    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append, alive=lambda pid: False)
+
+    assert code == 0
+    assert f"removing a stale supervisor lock (pid {dead_pid})" in logs
+    assert seen["pid"] == os.getpid()
