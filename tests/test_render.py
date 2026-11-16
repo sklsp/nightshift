@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from nightshift.config import RunConfig
+from nightshift.config import ConfigError, RunConfig, load_config
 from nightshift.items import Item
 from nightshift.render import RenderError, render_run
 
@@ -244,3 +244,97 @@ def test_start_file_names_a_branch_when_none_is_configured(tmp_path: Path) -> No
     text = (out / "00-start.md").read_text(encoding="utf-8")
     assert "branch `main`" in text
     assert "``" not in text
+
+
+def _write_run_toml(run_dir: Path, text: str) -> None:
+    """Write a run.toml into the given directory."""
+    (run_dir / "run.toml").write_text(text, encoding="utf-8")
+
+
+RUN_TOML = """\
+[run]
+name = "demo"
+repo = "."
+
+[check]
+test = ["pytest", "-q"]
+"""
+
+
+def test_project_templates_dir_overrides_start_only(tmp_path: Path) -> None:
+    out = tmp_path / "out"
+    tpl = out / "tpl"
+    tpl.mkdir(parents=True)
+    (tpl / "start.md").write_text("custom start for $name on $branch\n", encoding="utf-8")
+    config = RunConfig(name="demo", repo=tmp_path / "repo", test=["pytest"], templates="tpl")
+    render_run(config, _items(), out)
+    assert (out / "00-start.md").read_text(encoding="utf-8") == "custom start for demo on main\n"
+    item_text = (out / "item-01.md").read_text(encoding="utf-8")
+    assert "item 1 of 1 to 3" in item_text
+    assert "WHEN DONE:" in item_text
+
+
+def test_project_templates_dir_overrides_both_files(tmp_path: Path) -> None:
+    out = tmp_path / "out"
+    tpl = tmp_path / "tpl"
+    tpl.mkdir()
+    (tpl / "start.md").write_text("custom start $name, costs $$5\n", encoding="utf-8")
+    (tpl / "item.md").write_text("custom item $number of $total: $title ($id)\n", encoding="utf-8")
+    config = RunConfig(name="demo", repo=tmp_path / "repo", test=["pytest"], templates=tpl.as_posix())
+    render_run(config, _items(), out)
+    assert (out / "00-start.md").read_text(encoding="utf-8") == "custom start demo, costs $5\n"
+    assert (out / "item-01.md").read_text(encoding="utf-8") == "custom item 1 of 3: first item (T1)\n"
+
+
+def test_relative_templates_path_resolved_against_run_dir(tmp_path: Path) -> None:
+    out = tmp_path / "out"
+    tpl = out / "nested" / "tpl"
+    tpl.mkdir(parents=True)
+    (tpl / "start.md").write_text("relative start $name\n", encoding="utf-8")
+    config = RunConfig(name="demo", repo=tmp_path / "repo", test=["pytest"], templates="nested/tpl")
+    render_run(config, _items(), out)
+    assert (out / "00-start.md").read_text(encoding="utf-8") == "relative start demo\n"
+
+
+def test_unknown_placeholder_in_project_start_template_raises(tmp_path: Path) -> None:
+    out = tmp_path / "out"
+    tpl = out / "tpl"
+    tpl.mkdir(parents=True)
+    (tpl / "start.md").write_text("custom start $bogus\n", encoding="utf-8")
+    config = RunConfig(name="demo", repo=tmp_path / "repo", test=["pytest"], templates="tpl")
+    with pytest.raises(RenderError, match=r"unknown placeholder \$bogus in start\.md"):
+        render_run(config, _items(), out)
+
+
+def test_unknown_placeholder_in_project_item_template_raises(tmp_path: Path) -> None:
+    out = tmp_path / "out"
+    tpl = out / "tpl"
+    tpl.mkdir(parents=True)
+    (tpl / "item.md").write_text("custom item $typo\n", encoding="utf-8")
+    config = RunConfig(name="demo", repo=tmp_path / "repo", test=["pytest"], templates="tpl")
+    with pytest.raises(RenderError, match=r"unknown placeholder \$typo in item\.md"):
+        render_run(config, _items(), out)
+
+
+def test_config_templates_key_set(tmp_path: Path) -> None:
+    _write_run_toml(
+        tmp_path,
+        '[run]\nname = "demo"\nrepo = "."\ntemplates = "tpl"\n\n[check]\ntest = ["pytest", "-q"]\n',
+    )
+    cfg = load_config(tmp_path)
+    assert cfg.templates == "tpl"
+
+
+def test_config_templates_key_unset_defaults_to_empty(tmp_path: Path) -> None:
+    _write_run_toml(tmp_path, RUN_TOML)
+    cfg = load_config(tmp_path)
+    assert cfg.templates == ""
+
+
+def test_config_templates_key_wrong_type_is_rejected(tmp_path: Path) -> None:
+    _write_run_toml(
+        tmp_path,
+        '[run]\nname = "demo"\nrepo = "."\ntemplates = 5\n\n[check]\ntest = ["pytest", "-q"]\n',
+    )
+    with pytest.raises(ConfigError, match="wrong type for 'run.templates': expected str"):
+        load_config(tmp_path)

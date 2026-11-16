@@ -17,14 +17,15 @@ class RenderError(Exception):
 def render_run(config: RunConfig, items: list[Item], out_dir: Path) -> list[Path]:
     """Write 00-start.md, one file per item and checklist.txt into out_dir."""
     run_dir = out_dir.resolve()
+    templates_dir = _templates_dir(config, run_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     written = [out_dir / "00-start.md"]
-    written[0].write_text(_start_text(config, len(items), run_dir), encoding="utf-8", newline="\n")
+    written[0].write_text(_start_text(config, len(items), run_dir, templates_dir), encoding="utf-8", newline="\n")
 
     total = len(items)
     for item in items:
         path = out_dir / f"item-{item.number:02d}.md"
-        path.write_text(_item_text(config, item, total, run_dir), encoding="utf-8", newline="\n")
+        path.write_text(_item_text(config, item, total, run_dir, templates_dir), encoding="utf-8", newline="\n")
         written.append(path)
 
     checklist = [f"- [ ] {config.prefix}{item.number}. {item.title}" for item in items]
@@ -47,47 +48,55 @@ def _render_error_message(problems: dict[Path, list[str]]) -> str:
     return "\n".join(lines)
 
 
-def _start_text(config: RunConfig, total: int, run_dir: Path) -> str:
+def _start_text(config: RunConfig, total: int, run_dir: Path, templates_dir: Path | None) -> str:
     """Render the 00-start.md text for one run."""
-    template = Template(_template("start.md"))
+    template = Template(_template(templates_dir, "start.md"))
     item_paths = [(run_dir / f"item-{number:02d}.md").as_posix() for number in range(1, total + 1)]
-    return template.substitute(
-        name=config.name,
-        branch=config.branch or current_branch(config.repo) or "main",  # never empty backticks
-        prefix=config.prefix,
-        total=str(total),
-        first_item=item_paths[0],
-        items_list="\n".join(f"  {path}" for path in item_paths),
-        checklist_file=(run_dir / "checklist.txt").as_posix(),
-        progress_file=_progress_path(config).as_posix(),
-        check_command=_check_command(config),
-        command=command_prefix(config),
-        run_dir=run_dir.resolve().as_posix(),
-        timeout_hint=str(config.timeout_hint_seconds),
+    return _substitute(
+        template,
+        "start.md",
+        {
+            "name": config.name,
+            "branch": config.branch or current_branch(config.repo) or "main",  # never empty backticks
+            "prefix": config.prefix,
+            "total": str(total),
+            "first_item": item_paths[0],
+            "items_list": "\n".join(f"  {path}" for path in item_paths),
+            "checklist_file": (run_dir / "checklist.txt").as_posix(),
+            "progress_file": _progress_path(config).as_posix(),
+            "check_command": _check_command(config),
+            "command": command_prefix(config),
+            "run_dir": run_dir.resolve().as_posix(),
+            "timeout_hint": str(config.timeout_hint_seconds),
+        },
     )
 
 
-def _item_text(config: RunConfig, item: Item, total: int, run_dir: Path) -> str:
+def _item_text(config: RunConfig, item: Item, total: int, run_dir: Path, templates_dir: Path | None) -> str:
     """Render the spec file text for one item."""
-    template = Template(_template("item.md"))
+    template = Template(_template(templates_dir, "item.md"))
     start_file = (run_dir / "00-start.md").as_posix()
     if item.number < total:
         next_item = (run_dir / f"item-{item.number + 1:02d}.md").as_posix()
         ending = f"open {next_item} and do that item. Do not look at it before this one is committed."
     else:
         ending = f"all items are done; send the final message described in {start_file}."
-    return template.substitute(
-        name=config.name,
-        number=str(item.number),
-        total=str(total),
-        title=item.title,
-        body=item.body,
-        id=f"{config.prefix}{item.number}",
-        start_file=start_file,
-        progress_file=_progress_path(config).as_posix(),
-        command=command_prefix(config),
-        ending=ending,
-        run_dir=run_dir.resolve().as_posix(),
+    return _substitute(
+        template,
+        "item.md",
+        {
+            "name": config.name,
+            "number": str(item.number),
+            "total": str(total),
+            "title": item.title,
+            "body": item.body,
+            "id": f"{config.prefix}{item.number}",
+            "start_file": start_file,
+            "progress_file": _progress_path(config).as_posix(),
+            "command": command_prefix(config),
+            "ending": ending,
+            "run_dir": run_dir.resolve().as_posix(),
+        },
     )
 
 
@@ -103,6 +112,29 @@ def _check_command(config: RunConfig) -> str:
     return " ; ".join(parts)
 
 
-def _template(name: str) -> str:
-    """Read a template file from the package data."""
+def _templates_dir(config: RunConfig, run_dir: Path) -> Path | None:
+    """Return the project's templates dir resolved against the run dir, or None when unset."""
+    if not config.templates:
+        return None
+    path = Path(config.templates)
+    if not path.is_absolute():
+        path = run_dir / path
+    return path
+
+
+def _template(templates_dir: Path | None, name: str) -> str:
+    """Read one template from the project dir when present, else from the package data."""
+    if templates_dir is not None:
+        path = templates_dir / name
+        if path.is_file():
+            return path.read_text(encoding="utf-8")
     return files("nightshift").joinpath(f"templates/{name}").read_text(encoding="utf-8")
+
+
+def _substitute(template: Template, template_name: str, mapping: dict[str, str]) -> str:
+    """Fill one template; raise RenderError naming the file and placeholder on a typo."""
+    try:
+        return template.substitute(mapping)
+    except KeyError as exc:
+        placeholder = exc.args[0] if exc.args else "?"
+        raise RenderError(f"unknown placeholder ${placeholder} in {template_name}") from exc
