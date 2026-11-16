@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.12.0
+
+- templates: a project can bring its own start.md and item.md; set templates in [run] to a directory relative to the run dir or an absolute path, any file you do not provide falls back to the built-in one, and an unknown placeholder raises a RenderError naming the template file and the placeholder
+- doctor: reports a templates line when the key is set, rendering both templates into a temporary directory with the run's real items so a bad placeholder fails before build; a missing directory is reported too
+- init: writes the templates key commented out in the example run.toml
+- README: Your own templates section lists every placeholder of start.md and item.md
+- release: version 0.12.0 and this changelog
+
 ## 0.11.0
 
 - watch: new nightshift watch command prints new commits and supervisor events as they appear, ends with a finished line when the progress file is fully ticked and returns 0 on Ctrl+C; --once does one poll that prints what exists now (all events plus the last five commits)
