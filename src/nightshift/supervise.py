@@ -111,6 +111,8 @@ def supervise(
         return unknown_streak >= config.status_retry_polls
 
     for session in range(1, config.max_sessions + 1):
+        if _status_gave_up():
+            unknown_streak = 0  # the session that gave up has ended; the next one gets a fresh budget
         status = _status()
         while status is None and not _status_gave_up():
             status = _status()

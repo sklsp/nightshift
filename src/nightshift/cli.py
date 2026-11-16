@@ -45,6 +45,10 @@ test = ["pytest"]        # test command run from the repo root; no -q here, see 
 # running_pattern = "running"  # substring in status output meaning the agent is alive
 # poll_seconds = 30           # supervisor poll interval
 # max_sessions = 20           # restart limit before giving up
+# launch_grace_polls = 4      # polls to wait for a launched agent to report running
+# status_retry_polls = 10     # unreadable status polls in a row before a session counts as ended
+# launch_backoff_seconds = 60  # wait before relaunching a failed start; doubles, at most 900
+# max_launch_failures = 6     # failed starts in a row before giving up with exit code 2
 # idle_minutes = 60           # no commit and no file change this long means stuck
 # stop = []                   # optional command run once when a session looks stuck
 """

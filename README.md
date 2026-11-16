@@ -90,7 +90,8 @@ myrun/                  the run directory, outside the repo
 | `agent.launch_grace_polls` | `4` | status polls to wait for a launched agent to report running; if it never does, the supervisor backs off and relaunches without counting the session as empty |
 | `agent.idle_minutes` | `60` | minutes without a repo change (HEAD plus git status) before the supervisor reports the agent stuck |
 | `agent.stop` | `[]` | command run once to end a session when it looks stuck; empty means do nothing |
-| `agent.launch_backoff_seconds` | `60` | seconds to wait before relaunching a failed agent start; doubles each failure up to 15 minutes |
+| `agent.status_retry_polls` | `10` | status polls in a row that may fail (the status command itself errors) before the session counts as ended; an unreadable status is unknown, never "stopped" |
+| `agent.launch_backoff_seconds` | `60` | seconds to wait before relaunching a failed agent start; doubles each failure up to 15 minutes; each failed start uses one of `max_sessions` |
 | `agent.max_launch_failures` | `6` | consecutive failed starts before the supervisor gives up with exit code 2 |
 
 Note for Cline users: the launch command may print "zen dispatch failed" while the session still starts; nightshift does not treat launch output as failure.

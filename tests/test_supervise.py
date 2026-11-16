@@ -557,3 +557,22 @@ def test_ten_unknown_statuses_end_the_session(tmp_path: Path, monkeypatch) -> No
     assert code == 1
     assert launches == []
     assert logs.count("agent status unknown for 10 polls; treating the session as ended") == 1
+
+
+def test_a_session_after_an_unknown_give_up_gets_a_fresh_budget(tmp_path: Path, monkeypatch) -> None:
+    config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=2)
+    clock = Clock()
+    # Session 1: eleven unknowns end it. Session 2: running, one unknown, running again, then stopped.
+    statuses = iter([None] * 11 + [True, None, True, False])
+
+    def fake_is_running(cfg: RunConfig, quiet: bool = False) -> bool | None:
+        return next(statuses, False)
+
+    monkeypatch.setattr(agent_module, "is_running", fake_is_running)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
+
+    logs: list[str] = []
+    supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+
+    # Without the reset, session 2's first unknown poll would end it at once and never log the recovery.
+    assert "agent status readable again after 1 failed polls" in logs
