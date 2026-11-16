@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.12.3
+
+- tests: new test_packaging.py builds a wheel of the repo through the PEP 517 hook without the network and checks it holds both templates, every module and an entry_points.txt with nightshift = nightshift.cli:main; setuptools joins the dev extras and .gitignore lists build/
+- README: Install covers pip install from the git repository URL plus the editable dev install with [dev], and Quick start is at most eight commands (init, edit the two files, doctor, build, supervise, watch, report); a new test parses every quick start command against build_parser() so it stays real
+- release: version 0.12.3 and this changelog
+
 ## 0.12.2
 
 - docs: new docs/ARCHITECTURE.md explains how nightshift works inside from the code: the life of a run with a mermaid sequence diagram, one line per module, the supervisor's rules and why each exists, and the files a run leaves behind; README links it near the top
