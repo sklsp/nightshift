@@ -210,10 +210,10 @@ def _queue(run_dirs: list[Path]) -> int:
             return 2
     for run_dir in run_dirs:
         code = _supervise(run_dir)
-        print(f"queue: {run_dir} finished with {code}")
+        print(f"queue: {run_dir} finished with {code}", flush=True)
         if code != 0:
             return code
-    print(f"queue: all {len(run_dirs)} runs finished")
+    print(f"queue: all {len(run_dirs)} runs finished", flush=True)
     return 0
 
 

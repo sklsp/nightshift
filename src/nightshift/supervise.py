@@ -93,6 +93,10 @@ def _pid_alive(pid: int) -> bool:
         # os.kill would terminate the process on Windows, so ask kernel32 instead.
         kernel32 = ctypes.windll.kernel32
         kernel32.OpenProcess.restype = ctypes.c_void_p
+        # explicit argtypes: without them ctypes passes a Python int as a C int, which a 64-bit handle overflows
+        kernel32.OpenProcess.argtypes = [ctypes.c_ulong, ctypes.c_int, ctypes.c_ulong]
+        kernel32.GetExitCodeProcess.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_ulong)]
+        kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
         handle = kernel32.OpenProcess(_PROCESS_QUERY_INFORMATION, False, pid)
         if not handle:
             return False

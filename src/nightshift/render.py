@@ -6,6 +6,7 @@ from string import Template
 
 from nightshift.config import RunConfig, command_prefix, quote_arg
 from nightshift.items import Item
+from nightshift.supervise import _current_branch
 from nightshift.textlint import lint_files
 
 
@@ -52,7 +53,7 @@ def _start_text(config: RunConfig, total: int, run_dir: Path) -> str:
     item_paths = [(run_dir / f"item-{number:02d}.md").as_posix() for number in range(1, total + 1)]
     return template.substitute(
         name=config.name,
-        branch=config.branch,
+        branch=config.branch or _current_branch(config.repo) or "main",  # never empty backticks
         prefix=config.prefix,
         total=str(total),
         first_item=item_paths[0],

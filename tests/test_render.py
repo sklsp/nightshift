@@ -234,3 +234,13 @@ def test_lessons_md_has_a_section_per_new_rule() -> None:
     lessons = lessons_path.read_text(encoding="utf-8")
     assert "## Keep the why when you rewrite text" in lessons
     assert "## Notes files are append-only" in lessons
+
+
+def test_start_file_names_a_branch_when_none_is_configured(tmp_path: Path) -> None:
+    # branch is optional since 0.9.0; the spec must never say "branch ``". The repo here is not a git repo,
+    # so the fallback is "main".
+    out = tmp_path / "out"
+    render_run(_config(tmp_path), _items(), out)
+    text = (out / "00-start.md").read_text(encoding="utf-8")
+    assert "branch `main`" in text
+    assert "``" not in text
