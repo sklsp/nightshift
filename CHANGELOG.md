@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.0
+
+- agent: a failed status check is unknown, not stopped (is_running returns None instead of False when the command fails or times out)
+- supervise: an unreadable status never ends a session; unknown polls are retried up to [agent] status_retry_polls before the session is treated as ended, and recovery is logged
+- supervise: a failed agent launch is retried after a backoff that doubles each time (capped at 15 minutes) and never counts as an empty session; [agent] max_launch_failures consecutive failures end the run with exit code 2
+- release: version 0.7.0 and this changelog; all three supervisor changes came from the second dogfood run (Sparton run 13), where Windows refused to start new processes for a while
+
 ## 0.6.0
 
 - gate: wait exits with code 1 when the check fails and writes the result line to .gate/result.txt so a failed run is visible in scripts and logs
