@@ -308,3 +308,58 @@ def test_status_skips_bad_supervisor_event_lines(tmp_path: Path, capsys: pytest.
         "  23:05:00 event 6",
         "  23:06:00 event 7",
     ]
+
+
+def _make_doctor_run(tmp_path: Path, repo: Path, branch: str | None) -> Path:
+    """Create a run dir that passes every doctor check except possibly the branch one."""
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    toml = f'[run]\nname = "st"\nrepo = "{repo.as_posix()}"\nprefix = "N"\n'
+    if branch is not None:
+        toml += f'branch = "{branch}"\n'
+    toml += f'[check]\ntest = [{sys.executable!r}]\n'
+    (run_dir / "run.toml").write_text(toml, encoding="utf-8")
+    (run_dir / "items.md").write_text(
+        "# Items\n\n## first item\nDo the thing and tick it.\n", encoding="utf-8"
+    )
+    return run_dir
+
+
+def test_doctor_reports_branch_ok(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init")
+    _git(repo, "checkout", "-q", "-b", "main")
+
+    run_dir = _make_doctor_run(tmp_path, repo, branch="main")
+
+    assert main(["doctor", str(run_dir)]) == 0
+    out = capsys.readouterr().out
+    assert "ok: branch" in out
+
+
+def test_doctor_reports_branch_problem(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init")
+    _git(repo, "checkout", "-q", "-b", "feature")
+
+    run_dir = _make_doctor_run(tmp_path, repo, branch="main")
+
+    assert main(["doctor", str(run_dir)]) == 1
+    out = capsys.readouterr().out
+    assert "problem: branch: repo is on branch feature, this run needs main" in out
+
+
+def test_doctor_skips_branch_check_when_unset(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init")
+
+    run_dir = _make_doctor_run(tmp_path, repo, branch=None)
+
+    assert main(["doctor", str(run_dir)]) == 0
+    out = capsys.readouterr().out
+    assert "ok: branch" not in out
+    assert "problem: branch" not in out
+

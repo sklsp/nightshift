@@ -17,7 +17,7 @@ class RunConfig:
     name: str
     repo: Path
     test: list[str]
-    branch: str = "main"
+    branch: str = ""
     prefix: str = "T"
     command: list[str] = field(default_factory=lambda: ["nightshift"])
     lint: list[str] = field(default_factory=list)
@@ -84,7 +84,7 @@ def load_config(run_dir: Path) -> RunConfig:
     if not repo.is_absolute():
         repo = (run_dir / repo).resolve()
 
-    branch = _str(run, "run", "branch", "main")
+    branch = _str(run, "run", "branch", "")
     prefix = _str(run, "run", "prefix", "T")
     if not re.fullmatch(r"[A-Z]{1,3}", prefix):
         raise ConfigError("invalid value for 'run.prefix': 1 to 3 capital letters")

@@ -51,6 +51,7 @@ def _setup(
     stop=None,
     launch_backoff_seconds=60,
     max_launch_failures=6,
+    branch="",
 ) -> tuple[RunConfig, Path]:
     """Build a repo with a progress file and a run dir holding two items."""
     repo = tmp_path / "repo"
@@ -70,6 +71,7 @@ def _setup(
         stop=list(stop or []),
         launch_backoff_seconds=launch_backoff_seconds,
         max_launch_failures=max_launch_failures,
+        branch=branch,
     )
     return config, run_dir
 
@@ -715,3 +717,52 @@ def test_stale_lock_is_removed_and_taken_over(tmp_path: Path, monkeypatch) -> No
     assert code == 0
     assert f"removing a stale supervisor lock (pid {dead_pid})" in logs
     assert seen["pid"] == os.getpid()
+
+def test_refuses_to_start_on_the_wrong_branch(tmp_path: Path, monkeypatch) -> None:
+    config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5, branch="main")
+    _git_init(config.repo)
+    subprocess.run(
+        ["git", "checkout", "-q", "-b", "feature"],
+        cwd=config.repo, check=True, capture_output=True, text=True, stdin=subprocess.DEVNULL,
+    )
+    clock = Clock()
+    launches: list[str] = []
+
+    monkeypatch.setattr(agent_module, "is_running", lambda cfg, quiet=False: False)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: launches.append(message))
+
+    logs: list[str] = []
+    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+
+    assert code == 2
+    # The supervisor must refuse before taking the lock or launching anything.
+    assert not launches
+    assert not (config.repo / ".git" / "nightshift-supervise.lock").exists()
+    assert logs == ["repo is on branch feature, this run needs main; refusing to start"]
+
+
+def test_starts_when_on_the_right_branch(tmp_path: Path, monkeypatch) -> None:
+    config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5, branch="night")
+    _git_init(config.repo)
+    subprocess.run(
+        ["git", "checkout", "-q", "-b", "night"],
+        cwd=config.repo, check=True, capture_output=True, text=True, stdin=subprocess.DEVNULL,
+    )
+    clock = Clock()
+    calls = {"n": 0}
+
+    def fake_is_running(cfg: RunConfig, quiet: bool = False) -> bool:
+        calls["n"] += 1
+        if calls["n"] == 3:
+            (config.repo / "PROGRESS-sup.md").write_text(_TICKED, encoding="utf-8")
+        return calls["n"] in (2, 3)
+
+    monkeypatch.setattr(agent_module, "is_running", fake_is_running)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
+
+    logs: list[str] = []
+    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+
+    assert code == 0
+    assert logs == ["session 1 ended: 2/2 done, 0 blocked"]
+

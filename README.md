@@ -75,7 +75,7 @@ myrun/                  the run directory, outside the repo
 | --- | --- | --- |
 | `run.name` | required | short id for PROGRESS-<name>.md and item ids (letters, digits, dashes) |
 | `run.repo` | required | path to the repo root, relative to the run dir or absolute |
-| `run.branch` | `"main"` | branch to work on; never pushed |
+| `run.branch` | `""` | when set, refuse to start unless the repo is on this branch (checked by supervise and doctor) |
 | `run.prefix` | `"T"` | item id prefix: T1, T2, ... |
 | `run.command` | `["nightshift"]` | program the rendered spec tells the agent to run; for example `["W:/nightshift/.venv/Scripts/python.exe", "-m", "nightshift"]` when it is not on PATH |
 | `check.test` | required | test command, run from the repo root |

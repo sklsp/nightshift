@@ -27,7 +27,7 @@ _EXAMPLE_RUN_TOML = """\
 [run]
 name = "example"      # short id for PROGRESS-<name>.md and commit ids (letters, digits, dashes)
 repo = ".."           # path to the repo root, relative to this run dir or absolute
-# branch = "main"     # branch to work on; never pushed
+# branch = ""         # when set, refuse to start unless the repo is on this branch
 # prefix = "T"        # item id prefix: T1, T2, ...
 # command = ["nightshift"]  # program the spec tells the agent to run; full path plus -m nightshift when not on PATH
 
@@ -231,6 +231,10 @@ def _doctor(run_dir: Path) -> int:
         ok, problem = repo_result
         report("repo", ok, problem)
 
+    if config.branch:
+        ok, problem = _branch_check(config.repo, config.branch)
+        report("branch", ok, problem)
+
     for check, program in _program_checks(config):
         if shutil.which(program) is not None or Path(program).is_file():
             report(check, True)
@@ -261,6 +265,23 @@ def _repo_check(repo: Path) -> tuple[bool, str] | None:
     if result.returncode == 0 and result.stdout.strip() == "true":
         return True, ""
     return False, f"run git init in {repo}"
+
+
+def _branch_check(repo: Path, wanted: str) -> tuple[bool, str]:
+    """Check that repo sits on the branch named by the run; return (ok, problem)."""
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repo), "branch", "--show-current"],
+            capture_output=True,
+            text=True,
+            stdin=subprocess.DEVNULL,
+        )
+    except FileNotFoundError:
+        return False, "install git or put it on PATH"
+    actual = result.stdout.strip() if result.returncode == 0 else ""
+    if actual == wanted:
+        return True, ""
+    return False, f"repo is on branch {actual}, this run needs {wanted}"
 
 
 def _program_checks(config: RunConfig) -> list[tuple[str, str]]:

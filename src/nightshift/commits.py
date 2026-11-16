@@ -33,10 +33,11 @@ def _run_git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
 
 
 def resolve_base(config: RunConfig) -> str | None:
-    """Return the default range base: merge-base with run.branch, else the first commit."""
-    result = _run_git(config.repo, "merge-base", config.branch, "HEAD")
-    if result.returncode == 0 and result.stdout.strip():
-        return result.stdout.strip()
+    """Return the default range base: merge-base with run.branch when set, else the first commit."""
+    if config.branch:
+        result = _run_git(config.repo, "merge-base", config.branch, "HEAD")
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
     root = _run_git(config.repo, "rev-list", "--max-parents=0", "HEAD")
     if root.returncode != 0 or not root.stdout.strip():
         return None

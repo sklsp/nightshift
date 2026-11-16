@@ -171,6 +171,22 @@ def _release_lock(lock_path: Path) -> None:
 
 
 
+def _current_branch(repo: Path) -> str:
+    """Return the repo's current branch name, or an empty string when git cannot tell."""
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repo), "branch", "--show-current"],
+            capture_output=True,
+            text=True,
+            stdin=subprocess.DEVNULL,
+        )
+    except OSError:
+        return ""
+    if result.returncode != 0:
+        return ""
+    return result.stdout.strip()
+
+
 def supervise(
     config: RunConfig,
     run_dir: Path,
@@ -203,6 +219,12 @@ def supervise(
         except OSError:
             # The event log is only for reading the run afterwards; a broken .gate must never stop supervision.
             pass
+
+    if config.branch:
+        actual = _current_branch(config.repo)
+        if actual != config.branch:
+            _log_with_events(f"repo is on branch {actual}, this run needs {config.branch}; refusing to start")
+            return 2
 
     lock_path = _lock_path(config.repo)
     if lock_path is not None and not _take_lock(lock_path, run_dir, _log_with_events, alive):

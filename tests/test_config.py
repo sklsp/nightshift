@@ -80,7 +80,7 @@ stop = ["lms", "stop"]
 def test_defaults_when_optional_keys_missing(tmp_path: Path) -> None:
     _write(tmp_path, MINIMAL)
     cfg = load_config(tmp_path)
-    assert cfg.branch == "main"
+    assert cfg.branch == ""
     assert cfg.prefix == "T"
     assert cfg.command == ["nightshift"]
     assert cfg.lint == []
@@ -153,6 +153,12 @@ def test_wrong_type_str(tmp_path: Path) -> None:
 def test_wrong_type_int(tmp_path: Path) -> None:
     _write(tmp_path, MINIMAL.replace('test = ["pytest", "-q"]', 'test = ["x"]\nmin_passed = "3"'))
     with pytest.raises(ConfigError, match="wrong type for 'check.min_passed': expected int"):
+        load_config(tmp_path)
+
+
+def test_branch_wrong_type_rejected(tmp_path: Path) -> None:
+    _write(tmp_path, MINIMAL.replace('name = "demo"', 'name = "demo"\nbranch = 5'))
+    with pytest.raises(ConfigError, match="wrong type for 'run.branch': expected str"):
         load_config(tmp_path)
 
 
