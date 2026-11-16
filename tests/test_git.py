@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from nightshift.git import current_branch, fingerprint, git_dir
+from nightshift.git import commit_log, current_branch, fingerprint, git_dir
 
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="git not on PATH")
 
@@ -66,3 +66,10 @@ def test_fingerprint_changes_after_edit_and_commit(tmp_path: Path) -> None:
     new_head = _git(repo, "rev-parse", "HEAD")
     after_commit = fingerprint(repo)
     assert after_commit == f"{new_head}\n"
+
+
+def test_commit_log_keeps_a_commit_with_an_empty_subject(tmp_path: Path) -> None:
+    repo = _make_repo(tmp_path)
+    _git(repo, "commit", "-q", "--allow-empty", "--allow-empty-message", "-m", "")
+    log = commit_log(repo)
+    assert [subject for _, _, subject in log] == ["", "root: initial import"]

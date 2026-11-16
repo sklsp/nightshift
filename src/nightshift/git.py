@@ -61,7 +61,7 @@ def commit_log(repo: Path) -> list[tuple[str, int, str]]:
         return []
     lines: list[tuple[str, int, str]] = []
     for line in result.stdout.splitlines():
-        short_hash, rest = line.split(" ", 1)
-        unix_time, subject = rest.split(" ", 1)
+        short_hash, _, rest = line.partition(" ")
+        unix_time, _, subject = rest.partition(" ")  # partition: an empty subject is allowed
         lines.append((short_hash, int(unix_time), subject))
     return lines
