@@ -24,14 +24,11 @@ def _commit(repo: Path, message: str) -> None:
     _git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "--allow-empty", "-m", message)
 
 
-def _make_repo(tmp_path: Path) -> Path:
+def _make_repo(tmp_path: Path, template: Path) -> Path:
     """Create a git repo with one initial commit and return its path."""
-    if shutil.which("git") is None:
-        pytest.skip("git not on PATH")
     repo = tmp_path / "repo"
-    repo.mkdir()
+    shutil.copytree(template, repo)
     (repo / "a.txt").write_text("x", encoding="utf-8")
-    _git(repo, "init")
     _git(repo, "add", ".")
     _commit(repo, "first commit")
     return repo
@@ -54,9 +51,9 @@ def _event(stamp: str, msg: str) -> str:
 
 
 def test_first_poll_prints_nothing_old_and_ctrl_c_returns_zero(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, git_template: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    repo = _make_repo(tmp_path)
+    repo = _make_repo(tmp_path, git_template)
     run_dir, config = _make_run(tmp_path, repo)
     (repo / "PROGRESS-st.md").write_text("- [ ] N1. one item\n", encoding="utf-8")
     gate = run_dir / ".gate"
@@ -73,9 +70,9 @@ def test_first_poll_prints_nothing_old_and_ctrl_c_returns_zero(
 
 
 def test_new_commit_and_event_printed_exactly_once(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, git_template: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    repo = _make_repo(tmp_path)
+    repo = _make_repo(tmp_path, git_template)
     run_dir, config = _make_run(tmp_path, repo)
     (repo / "PROGRESS-st.md").write_text("- [ ] N1. one item\n- [ ] N2. two items\n", encoding="utf-8")
     gate = run_dir / ".gate"
@@ -90,25 +87,31 @@ def test_new_commit_and_event_printed_exactly_once(
             _commit(repo, "second commit")
             with (gate / "supervise.jsonl").open("a", encoding="utf-8") as handle:
                 handle.write(_event("2026-01-01T10:05:00", "new event"))
-        else:
+        elif len(sleeps) == 2:
+            # ticked but uncommitted: watch must keep going for one more poll
             (repo / "PROGRESS-st.md").write_text("- [x] N1. one item\n- [x] N2. two items\n", encoding="utf-8")
+        else:
+            _git(repo, "add", "PROGRESS-st.md")
+            _commit(repo, "tick the run done")
 
     code = watch(config, run_dir, sleep=fake_sleep)
 
-    new_hash = commit_log(repo)[0][0]
+    tick_hash = commit_log(repo)[0][0]
+    new_hash = commit_log(repo)[1][0]
     assert code == 0
-    assert sleeps == [20.0, 20.0]
+    assert sleeps == [20.0, 20.0, 20.0]
     assert capsys.readouterr().out.splitlines() == [
         f"commit {new_hash} second commit",
         "10:05:00 new event",
+        f"commit {tick_hash} tick the run done",
         "watch: run finished",
     ]
 
 
 def test_finished_progress_ends_loop_with_final_line(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, git_template: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    repo = _make_repo(tmp_path)
+    repo = _make_repo(tmp_path, git_template)
     run_dir, config = _make_run(tmp_path, repo)
     gate = run_dir / ".gate"
     gate.mkdir()
@@ -124,9 +127,9 @@ def test_finished_progress_ends_loop_with_final_line(
 
 
 def test_once_prints_all_events_and_last_five_commits(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, git_template: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    repo = _make_repo(tmp_path)
+    repo = _make_repo(tmp_path, git_template)
     for number in range(2, 8):
         _commit(repo, f"commit {number}")
     run_dir, config = _make_run(tmp_path, repo)
@@ -146,8 +149,8 @@ def test_once_prints_all_events_and_last_five_commits(
     assert [line.split(" ", 2)[2] for line in lines[2:]] == [f"commit {n}" for n in range(3, 8)]
 
 
-def test_every_is_clamped_to_at_least_one_second(tmp_path: Path) -> None:
-    repo = _make_repo(tmp_path)
+def test_every_is_clamped_to_at_least_one_second(tmp_path: Path, git_template: Path) -> None:
+    repo = _make_repo(tmp_path, git_template)
     run_dir, config = _make_run(tmp_path, repo)
     (repo / "PROGRESS-st.md").write_text("- [ ] N1. one item\n", encoding="utf-8")
 
@@ -164,8 +167,8 @@ def test_every_is_clamped_to_at_least_one_second(tmp_path: Path) -> None:
     assert sleeps == [1]
 
 
-def test_cli_watch_once(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    repo = _make_repo(tmp_path)
+def test_cli_watch_once(tmp_path: Path, git_template: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    repo = _make_repo(tmp_path, git_template)
     run_dir, _config = _make_run(tmp_path, repo)
     gate = run_dir / ".gate"
     gate.mkdir()

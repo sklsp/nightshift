@@ -20,21 +20,18 @@ def _git(repo: Path, *args: str) -> str:
     return result.stdout.strip()
 
 
-def _make_repo(tmp_path: Path) -> Path:
+def _make_repo(tmp_path: Path, template: Path) -> Path:
     """Create a git repo on branch main with one root commit and one tracked file."""
     repo = tmp_path / "repo"
-    repo.mkdir()
-    _git(repo, "init", "-q", "-b", "main")
-    _git(repo, "config", "user.email", "night@test")
-    _git(repo, "config", "user.name", "Night")
+    shutil.copytree(template, repo)
     (repo / "file.txt").write_text("one\n", encoding="utf-8")
     _git(repo, "add", "file.txt")
     _git(repo, "commit", "-q", "-m", "root: initial import")
     return repo
 
 
-def test_current_branch_reports_a_fresh_branch(tmp_path: Path) -> None:
-    repo = _make_repo(tmp_path)
+def test_current_branch_reports_a_fresh_branch(tmp_path: Path, git_template: Path) -> None:
+    repo = _make_repo(tmp_path, git_template)
     _git(repo, "checkout", "-q", "-b", "feature")
     assert current_branch(repo) == "feature"
 
@@ -45,16 +42,16 @@ def test_current_branch_is_empty_outside_a_repo(tmp_path: Path) -> None:
     assert current_branch(folder) == ""
 
 
-def test_git_dir_is_absolute(tmp_path: Path) -> None:
-    repo = _make_repo(tmp_path)
+def test_git_dir_is_absolute(tmp_path: Path, git_template: Path) -> None:
+    repo = _make_repo(tmp_path, git_template)
     result = git_dir(repo)
     assert result is not None
     assert result.is_absolute()
     assert result == repo / ".git"
 
 
-def test_fingerprint_changes_after_edit_and_commit(tmp_path: Path) -> None:
-    repo = _make_repo(tmp_path)
+def test_fingerprint_changes_after_edit_and_commit(tmp_path: Path, git_template: Path) -> None:
+    repo = _make_repo(tmp_path, git_template)
     head = _git(repo, "rev-parse", "HEAD")
     before = fingerprint(repo)
     assert before == f"{head}\n"  # clean tree: HEAD plus empty status
@@ -68,8 +65,8 @@ def test_fingerprint_changes_after_edit_and_commit(tmp_path: Path) -> None:
     assert after_commit == f"{new_head}\n"
 
 
-def test_commit_log_keeps_a_commit_with_an_empty_subject(tmp_path: Path) -> None:
-    repo = _make_repo(tmp_path)
+def test_commit_log_keeps_a_commit_with_an_empty_subject(tmp_path: Path, git_template: Path) -> None:
+    repo = _make_repo(tmp_path, git_template)
     _git(repo, "commit", "-q", "--allow-empty", "--allow-empty-message", "-m", "")
     log = commit_log(repo)
     assert [subject for _, _, subject in log] == ["", "root: initial import"]

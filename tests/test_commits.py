@@ -32,15 +32,12 @@ def _commit(repo: Path, subject: str, body: str | None = "5 passed in 0.1s") -> 
     return _git(repo, "rev-parse", "HEAD")
 
 
-def _make_run(tmp_path: Path, config_branch: str = "main") -> tuple[Path, Path]:
+def _make_run(tmp_path: Path, template: Path, config_branch: str = "main") -> tuple[Path, Path]:
     """Create a git repo on branch main with one root commit plus a run dir."""
     repo = tmp_path / "repo"
     run_dir = tmp_path / "run"
-    repo.mkdir()
+    shutil.copytree(template, repo)
     run_dir.mkdir()
-    _git(repo, "init", "-q", "-b", "main")
-    _git(repo, "config", "user.email", "night@test")
-    _git(repo, "config", "user.name", "Night")
     _commit(repo, "root: initial import")
     toml_text = (
         f'[run]\nname = "c"\nrepo = "../repo"\nbranch = "{config_branch}"\nprefix = "T"\n\n'
@@ -60,8 +57,8 @@ def _config_and_items(run_dir: Path) -> tuple[RunConfig, list[Item]]:
     return load_config(run_dir), load_items(run_dir)
 
 
-def test_clean_run(tmp_path: Path) -> None:
-    repo, run_dir = _make_run(tmp_path)
+def test_clean_run(tmp_path: Path, git_template: Path) -> None:
+    repo, run_dir = _make_run(tmp_path, git_template)
     root = _git(repo, "rev-list", "--max-parents=0", "HEAD")
     for number in (1, 2, 3):
         _commit(repo, f"T{number}: item {number}")
@@ -70,8 +67,8 @@ def test_clean_run(tmp_path: Path) -> None:
     assert main(["commits", str(run_dir), "--base", root]) == 0
 
 
-def test_missing_prefix_is_reported(tmp_path: Path) -> None:
-    repo, run_dir = _make_run(tmp_path)
+def test_missing_prefix_is_reported(tmp_path: Path, git_template: Path) -> None:
+    repo, run_dir = _make_run(tmp_path, git_template)
     root = _git(repo, "rev-list", "--max-parents=0", "HEAD")
     for number in (1, 2, 3):
         _commit(repo, f"T{number}: item {number}")
@@ -82,8 +79,8 @@ def test_missing_prefix_is_reported(tmp_path: Path) -> None:
     assert main(["commits", str(run_dir), "--base", root]) == 1
 
 
-def test_split_item_is_reported(tmp_path: Path) -> None:
-    repo, run_dir = _make_run(tmp_path)
+def test_split_item_is_reported(tmp_path: Path, git_template: Path) -> None:
+    repo, run_dir = _make_run(tmp_path, git_template)
     root = _git(repo, "rev-list", "--max-parents=0", "HEAD")
     first = _commit(repo, "T1: item one")
     second = _commit(repo, "T1: fix the tick")
@@ -94,8 +91,8 @@ def test_split_item_is_reported(tmp_path: Path) -> None:
     assert lines == [f"T1 has 2 commits ({second[:7]}, {first[:7]})"]
 
 
-def test_missing_item_is_reported(tmp_path: Path) -> None:
-    repo, run_dir = _make_run(tmp_path)
+def test_missing_item_is_reported(tmp_path: Path, git_template: Path) -> None:
+    repo, run_dir = _make_run(tmp_path, git_template)
     root = _git(repo, "rev-list", "--max-parents=0", "HEAD")
     _commit(repo, "T1: item one")
     _commit(repo, "T2: item two")
@@ -103,8 +100,8 @@ def test_missing_item_is_reported(tmp_path: Path) -> None:
     assert commit_report(config, items, base=root) == ["T3 has no commit"]
 
 
-def test_empty_body_is_reported(tmp_path: Path) -> None:
-    repo, run_dir = _make_run(tmp_path)
+def test_empty_body_is_reported(tmp_path: Path, git_template: Path) -> None:
+    repo, run_dir = _make_run(tmp_path, git_template)
     root = _git(repo, "rev-list", "--max-parents=0", "HEAD")
     _commit(repo, "T1: item one")
     bare = _commit(repo, "T2: item two", body=None)
@@ -113,8 +110,8 @@ def test_empty_body_is_reported(tmp_path: Path) -> None:
     assert commit_report(config, items, base=root) == [f"{bare[:7]} has an empty body"]
 
 
-def test_default_base_uses_merge_base(tmp_path: Path) -> None:
-    repo, run_dir = _make_run(tmp_path)
+def test_default_base_uses_merge_base(tmp_path: Path, git_template: Path) -> None:
+    repo, run_dir = _make_run(tmp_path, git_template)
     root = _git(repo, "rev-list", "--max-parents=0", "HEAD")
     _git(repo, "checkout", "-q", "-b", "work")
     for number in (1, 2, 3):
@@ -124,8 +121,8 @@ def test_default_base_uses_merge_base(tmp_path: Path) -> None:
     assert commit_report(config, items) == []
 
 
-def test_default_base_falls_back_to_first_commit(tmp_path: Path) -> None:
-    repo, run_dir = _make_run(tmp_path, config_branch="nope")
+def test_default_base_falls_back_to_first_commit(tmp_path: Path, git_template: Path) -> None:
+    repo, run_dir = _make_run(tmp_path, git_template, config_branch="nope")
     root = _git(repo, "rev-list", "--max-parents=0", "HEAD")
     for number in (1, 2, 3):
         _commit(repo, f"T{number}: item {number}")
@@ -135,6 +132,6 @@ def test_default_base_falls_back_to_first_commit(tmp_path: Path) -> None:
     assert commit_report(config, items) == []
 
 
-def test_bad_base_is_an_error(tmp_path: Path) -> None:
-    repo, run_dir = _make_run(tmp_path)
+def test_bad_base_is_an_error(tmp_path: Path, git_template: Path) -> None:
+    repo, run_dir = _make_run(tmp_path, git_template)
     assert main(["commits", str(run_dir), "--base", "no-such-ref"]) == 1

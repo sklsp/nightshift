@@ -5,7 +5,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from nightshift.config import RunConfig
-from nightshift.git import commit_log
+from nightshift.git import commit_log, run_git
 from nightshift.supervise import read_run_progress, read_supervisor_events
 
 
@@ -23,6 +23,15 @@ def _event_line(event: dict[str, str]) -> str:
     return f"{event['t'].rsplit('T', 1)[-1]} {event['msg']}"
 
 
+def _committed(repo: Path, path: Path) -> bool:
+    """True when git reports no uncommitted changes for the progress file; a .gate copy needs none."""
+    if not path.is_file():
+        # cleanup removed the repo file and watch reads the .gate copy instead
+        return True
+    result = run_git(repo, "status", "--porcelain", "--", str(path))
+    return result.returncode == 0 and not result.stdout.strip()
+
+
 def watch(
     config: RunConfig,
     run_dir: Path,
@@ -32,7 +41,7 @@ def watch(
     sleep: Callable[[float], None] = time.sleep,
     out: Callable[[str], None] = _out,
 ) -> int:
-    """Print new commits and supervisor events until the run is finished; return 0."""
+    """Print new commits and supervisor events until every item is ticked and its final commit landed; return 0."""
     repo = config.repo
     progress_path = repo / f"PROGRESS-{config.name}.md"
 
@@ -57,7 +66,8 @@ def watch(
             event_count += len(events)
             for event in events:
                 out(_event_line(event))
-            if read_run_progress(progress_path, config.prefix, run_dir, log=_quiet).finished:
+            progress = read_run_progress(progress_path, config.prefix, run_dir, log=_quiet)
+            if progress.finished and _committed(repo, progress_path):
                 out("watch: run finished")
                 return 0
             sleep(interval)
