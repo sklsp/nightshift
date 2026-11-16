@@ -23,15 +23,16 @@ class AgentError(ValueError):
     """The agent section of run.toml is missing or invalid."""
 
 
-def launch(config: RunConfig, message: str) -> None:
-    """Run the configured launch command with every {message} replaced by the message."""
+def launch(config: RunConfig, message: str) -> int:
+    """Run the configured launch command with every {message} replaced; return its exit code."""
     if not config.launch:
         raise AgentError("missing required key 'agent.launch'")
     command = [arg.replace("{message}", message) for arg in config.launch]
-    subprocess.run(command, cwd=config.repo, stdin=subprocess.DEVNULL)
+    result = subprocess.run(command, cwd=config.repo, stdin=subprocess.DEVNULL)
+    return result.returncode
 
 
-def _format_exit_code(code: int) -> str:
+def format_exit_code(code: int) -> str:
     """Format an exit code, adding hex when it is above 0x7FFFFFFF or below zero."""
     if code > 0x7FFFFFFF or code < 0:
         return f"{code} (0x{code & 0xFFFFFFFF:08X})"
@@ -57,7 +58,7 @@ def is_running(config: RunConfig, *, quiet: bool = False) -> bool | None:
         return None
     if result.returncode != 0:
         if not quiet:
-            print(f"agent status command exited with code {_format_exit_code(result.returncode)}", file=sys.stderr)
+            print(f"agent status command exited with code {format_exit_code(result.returncode)}", file=sys.stderr)
         return None
     return re.search(config.running_pattern, result.stdout) is not None
 

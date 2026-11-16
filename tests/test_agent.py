@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from nightshift.agent import AgentError, _format_exit_code, is_running, launch
+from nightshift.agent import AgentError, format_exit_code, is_running, launch
 from nightshift.config import RunConfig
 
 
@@ -35,9 +35,15 @@ def test_launch_replaces_message_placeholder(tmp_path: Path) -> None:
         ],
     )
 
-    launch(config, "hello")
+    assert launch(config, "hello") == 0
 
     assert (config.repo / "launched.txt").read_text(encoding="utf-8") == "hello|x-hello-y"
+
+
+def test_launch_returns_nonzero_exit_code(tmp_path: Path) -> None:
+    config = _config(tmp_path, launch=[sys.executable, "-c", "import sys; sys.exit(7)"])
+
+    assert launch(config, "hello") == 7
 
 
 def test_is_running_matches_pattern(tmp_path: Path) -> None:
@@ -110,10 +116,10 @@ def test_missing_executable_is_unknown(tmp_path: Path, capsys: pytest.CaptureFix
 
 
 def test_format_exit_code_adds_hex_only_for_large_or_negative_codes() -> None:
-    assert _format_exit_code(3) == "3"
-    assert _format_exit_code(0x7FFFFFFF) == "2147483647"
-    assert _format_exit_code(3221225794) == "3221225794 (0xC0000142)"
-    assert _format_exit_code(-1073741502) == "-1073741502 (0xC0000142)"
+    assert format_exit_code(3) == "3"
+    assert format_exit_code(0x7FFFFFFF) == "2147483647"
+    assert format_exit_code(3221225794) == "3221225794 (0xC0000142)"
+    assert format_exit_code(-1073741502) == "-1073741502 (0xC0000142)"
 
 
 @pytest.mark.skipif(not sys.platform.startswith("win"), reason="POSIX truncates exit codes to 8 bits")

@@ -14,12 +14,14 @@ class Clock:
 
     def __init__(self) -> None:
         self.t = 0.0
+        self.sleeps: list[float] = []
 
     def time(self) -> float:
         return self.t
 
     def sleep(self, seconds: float) -> None:
         self.t += seconds
+        self.sleeps.append(seconds)
 
 
 _ITEMS_MD = """\
@@ -37,7 +39,14 @@ _TICKED = "- [x] T1. first item (1 passed in 0.01s)\n- [x] T2. second item (2 pa
 
 
 def _setup(
-    tmp_path: Path, progress_text: str, max_sessions: int, *, idle_minutes=60, stop=None
+    tmp_path: Path,
+    progress_text: str,
+    max_sessions: int,
+    *,
+    idle_minutes=60,
+    stop=None,
+    launch_backoff_seconds=60,
+    max_launch_failures=6,
 ) -> tuple[RunConfig, Path]:
     """Build a repo with a progress file and a run dir holding two items."""
     repo = tmp_path / "repo"
@@ -55,6 +64,8 @@ def _setup(
         max_sessions=max_sessions,
         idle_minutes=idle_minutes,
         stop=list(stop or []),
+        launch_backoff_seconds=launch_backoff_seconds,
+        max_launch_failures=max_launch_failures,
     )
     return config, run_dir
 
@@ -81,7 +92,12 @@ def test_supervise_finishes_when_progress_gets_ticked(tmp_path: Path, monkeypatc
         return calls["n"] in (2, 3)
 
     monkeypatch.setattr(agent_module, "is_running", fake_is_running)
-    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: launches.append(message))
+
+    def fake_launch(cfg: RunConfig, message: str) -> int:
+        launches.append(message)
+        return 0
+
+    monkeypatch.setattr(agent_module, "launch", fake_launch)
 
     logs: list[str] = []
     code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
@@ -97,7 +113,12 @@ def test_supervise_stops_at_max_sessions(tmp_path: Path, monkeypatch) -> None:
     launches: list[str] = []
 
     monkeypatch.setattr(agent_module, "is_running", lambda cfg, quiet=False: False)
-    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: launches.append(message))
+
+    def fake_launch(cfg: RunConfig, message: str) -> int:
+        launches.append(message)
+        return 0
+
+    monkeypatch.setattr(agent_module, "launch", fake_launch)
 
     logs: list[str] = []
     code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
@@ -111,14 +132,25 @@ def test_supervise_stops_after_three_empty_sessions(tmp_path: Path, monkeypatch)
     config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=10)
     clock = Clock()
     launches: list[str] = []
+    calls = {"n": 0}
 
-    monkeypatch.setattr(agent_module, "is_running", lambda cfg, quiet=False: False)
-    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: launches.append(message))
+    def fake_is_running(cfg: RunConfig, quiet: bool = False) -> bool | None:
+        # Each session starts (two failed polls then a running one) but never ticks an item.
+        calls["n"] += 1
+        return calls["n"] % 4 == 3
+
+    def fake_launch(cfg: RunConfig, message: str) -> int:
+        launches.append(message)
+        return 0
+
+    monkeypatch.setattr(agent_module, "is_running", fake_is_running)
+    monkeypatch.setattr(agent_module, "launch", fake_launch)
 
     logs: list[str] = []
     code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
 
     assert code == 1
+    # Three sessions ran and ended without progress; the fourth launch never happened.
     assert len(launches) == 3
     assert logs[-1] == "agent stuck: no new item done three times in a row; a human should look"
 
@@ -134,8 +166,12 @@ def test_supervise_does_not_launch_while_running(tmp_path: Path, monkeypatch) ->
         events.append("status")
         return calls["n"] <= 2
 
+    def fake_launch(cfg: RunConfig, message: str) -> int:
+        events.append("launch")
+        return 0
+
     monkeypatch.setattr(agent_module, "is_running", fake_is_running)
-    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: events.append("launch"))
+    monkeypatch.setattr(agent_module, "launch", fake_launch)
 
     logs: list[str] = []
     code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
@@ -180,7 +216,7 @@ def test_grace_period_waits_for_agent_to_start(tmp_path: Path, monkeypatch) -> N
         return calls["n"] in (4, 5)
 
     monkeypatch.setattr(agent_module, "is_running", fake_is_running)
-    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: None)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
 
     logs: list[str] = []
     code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
@@ -190,18 +226,87 @@ def test_grace_period_waits_for_agent_to_start(tmp_path: Path, monkeypatch) -> N
 
 
 def test_grace_period_logs_when_agent_never_starts(tmp_path: Path, monkeypatch) -> None:
-    config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5)
+    config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=2)
     clock = Clock()
 
     monkeypatch.setattr(agent_module, "is_running", lambda cfg, quiet=False: False)
-    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: None)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
 
     logs: list[str] = []
     code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
 
     assert code == 1
-    assert logs.count("agent did not start") == 3
-    assert logs[-1] == "agent stuck: no new item done three times in a row; a human should look"
+    # Every launch failed to start; the backoff doubled between sessions.
+    assert logs.count("agent did not start") == 2
+    assert clock.sleeps.count(60) == 1
+    assert clock.sleeps.count(120) == 1
+
+
+def test_failed_start_backs_off_then_the_next_session_finishes(tmp_path: Path, monkeypatch) -> None:
+    config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5)
+    clock = Clock()
+    launches: list[str] = []
+    calls = {"n": 0}
+
+    def fake_is_running(cfg: RunConfig, quiet: bool = False) -> bool | None:
+        calls["n"] += 1
+        if calls["n"] == 8:
+            (config.repo / "PROGRESS-sup.md").write_text(_TICKED, encoding="utf-8")
+        return calls["n"] in (7, 8)
+
+    def fake_launch(cfg: RunConfig, message: str) -> int:
+        launches.append(message)
+        return 0
+
+    monkeypatch.setattr(agent_module, "is_running", fake_is_running)
+    monkeypatch.setattr(agent_module, "launch", fake_launch)
+
+    logs: list[str] = []
+    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+
+    assert code == 0
+    # The first launch never came up and backed off; the second one finished the run.
+    assert len(launches) == 2
+    assert clock.sleeps.count(60) == 1
+
+
+def test_repeated_failed_starts_end_with_exit_code_two(tmp_path: Path, monkeypatch) -> None:
+    config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=10)
+    clock = Clock()
+    launches: list[str] = []
+
+    def fake_launch(cfg: RunConfig, message: str) -> int:
+        launches.append(message)
+        return 0
+
+    monkeypatch.setattr(agent_module, "is_running", lambda cfg, quiet=False: False)
+    monkeypatch.setattr(agent_module, "launch", fake_launch)
+
+    logs: list[str] = []
+    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+
+    assert code == 2
+    # The default cap is six failed starts; the supervisor gives up and asks for a human.
+    assert len(launches) == 6
+    assert logs[-1] == "agent cannot be launched after 6 tries; a human should look"
+
+
+def test_launch_backoff_is_capped_at_fifteen_minutes(tmp_path: Path, monkeypatch) -> None:
+    config, run_dir = _setup(
+        tmp_path, _UNTICKED, max_sessions=10, launch_backoff_seconds=600, max_launch_failures=3
+    )
+    clock = Clock()
+
+    monkeypatch.setattr(agent_module, "is_running", lambda cfg, quiet=False: False)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
+
+    logs: list[str] = []
+    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+
+    assert code == 2
+    # The backoff doubles (600 then 1200) but never exceeds the fifteen minute cap.
+    assert clock.sleeps.count(900) == 1
+    assert all(s <= 900 for s in clock.sleeps)
 
 
 def test_changing_fingerprint_never_triggers(tmp_path: Path, monkeypatch) -> None:
@@ -216,7 +321,7 @@ def test_changing_fingerprint_never_triggers(tmp_path: Path, monkeypatch) -> Non
         return calls["n"] <= 5
 
     monkeypatch.setattr(agent_module, "is_running", fake_is_running)
-    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: None)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
     # A fingerprint that changes on every poll, even though the session runs
     # far longer than idle_minutes.
     def fingerprint(repo: Path) -> str:
@@ -242,7 +347,7 @@ def test_unchanged_fingerprint_triggers_and_runs_stop_once(tmp_path: Path, monke
         return calls["n"] <= 6
 
     monkeypatch.setattr(agent_module, "is_running", fake_is_running)
-    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: None)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
     monkeypatch.setattr(agent_module, "stop", lambda cfg: stops.append(cfg))
 
     logs: list[str] = []
@@ -254,8 +359,8 @@ def test_unchanged_fingerprint_triggers_and_runs_stop_once(tmp_path: Path, monke
     # The stuck session was logged once and stopped exactly once...
     assert logs.count("agent looks stuck: no commit and no file change for 1 minutes") == 1
     assert len(stops) == 1
-    # ...and it counted as an empty session, so the three-empty-sessions rule fired.
-    assert logs[-1] == "agent stuck: no new item done three times in a row; a human should look"
+    # ...and every later launch failed to start, so the run ended at the session cap.
+    assert logs[-1] == "stopped after 5 sessions without finishing; a human should look"
 
 
 def test_unchanged_fingerprint_without_stop_only_logs(tmp_path: Path, monkeypatch) -> None:
@@ -268,7 +373,7 @@ def test_unchanged_fingerprint_without_stop_only_logs(tmp_path: Path, monkeypatc
         return calls["n"] <= 4
 
     monkeypatch.setattr(agent_module, "is_running", fake_is_running)
-    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: None)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
 
     logs: list[str] = []
     code = supervise(
@@ -332,7 +437,7 @@ poll_seconds = 0
         return calls["n"] in (2, 5)
 
     monkeypatch.setattr(agent_module, "is_running", fake_is_running)
-    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: None)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
 
     code = main(["supervise", str(run_dir)])
 
@@ -353,7 +458,7 @@ def test_supervise_copies_progress_to_gate_dir(tmp_path: Path, monkeypatch) -> N
         return calls["n"] in (2, 3)
 
     monkeypatch.setattr(agent_module, "is_running", fake_is_running)
-    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: None)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
 
     logs: list[str] = []
     code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
@@ -381,7 +486,7 @@ def test_supervise_uses_gate_copy_when_repo_progress_deleted(tmp_path: Path, mon
         return calls["n"] in (2, 3)
 
     monkeypatch.setattr(agent_module, "is_running", fake_is_running)
-    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: None)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
 
     logs: list[str] = []
     code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
@@ -399,7 +504,7 @@ def test_supervise_missing_progress_everywhere_means_not_started(tmp_path: Path,
     clock = Clock()
 
     monkeypatch.setattr(agent_module, "is_running", lambda cfg, quiet=False: False)
-    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: None)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
 
     logs: list[str] = []
     code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)

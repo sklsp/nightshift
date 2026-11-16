@@ -84,6 +84,7 @@ def supervise(
 
     last_poll = now() - config.poll_seconds  # allow an immediate first check
     empty_streak = 0
+    launch_failures = 0
     last_done = 0
     unknown_streak = 0
 
@@ -114,7 +115,9 @@ def supervise(
         while status is None and not _status_gave_up():
             status = _status()
         if status is False:
-            agent.launch(config, message)
+            code = agent.launch(config, message)
+            if code != 0:
+                log(f"agent launch exited with code {agent.format_exit_code(code)}")
             started = False
             for _poll in range(config.launch_grace_polls):
                 grace_status = _status()
@@ -125,6 +128,13 @@ def supervise(
                     break
             if not started:
                 log("agent did not start")
+                launch_failures += 1
+                if launch_failures >= config.max_launch_failures:
+                    log(f"agent cannot be launched after {launch_failures} tries; a human should look")
+                    return 2
+                sleep(min(config.launch_backoff_seconds * (2 ** (launch_failures - 1)), 900))
+                continue
+            launch_failures = 0
         last_fp = None
         fp_since = now()
         stuck_reported = False

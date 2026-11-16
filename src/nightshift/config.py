@@ -34,6 +34,8 @@ class RunConfig:
     status_retry_polls: int = 10
     idle_minutes: int = 60
     stop: list[str] = field(default_factory=list)
+    launch_backoff_seconds: int = 60
+    max_launch_failures: int = 6
 
 
 _SECTIONS = ("run", "check", "agent")
@@ -50,6 +52,8 @@ _AGENT_KEYS = {
     "status_retry_polls",
     "idle_minutes",
     "stop",
+    "launch_backoff_seconds",
+    "max_launch_failures",
 }
 
 
@@ -107,6 +111,12 @@ def load_config(run_dir: Path) -> RunConfig:
         raise ConfigError("invalid value for 'agent.status_retry_polls': must be at least 1")
     idle_minutes = _int(agent, "agent", "idle_minutes", 60)
     stop = _str_list(agent, "agent", "stop", [])
+    launch_backoff_seconds = _int(agent, "agent", "launch_backoff_seconds", 60)
+    max_launch_failures = _int(agent, "agent", "max_launch_failures", 6)
+    if launch_backoff_seconds < 1:
+        raise ConfigError("invalid value for 'agent.launch_backoff_seconds': must be at least 1")
+    if max_launch_failures < 1:
+        raise ConfigError("invalid value for 'agent.max_launch_failures': must be at least 1")
 
     return RunConfig(
         name=name,
@@ -129,6 +139,8 @@ def load_config(run_dir: Path) -> RunConfig:
         status_retry_polls=status_retry_polls,
         idle_minutes=idle_minutes,
         stop=stop,
+        launch_backoff_seconds=launch_backoff_seconds,
+        max_launch_failures=max_launch_failures,
     )
 
 

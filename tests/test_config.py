@@ -97,6 +97,8 @@ def test_defaults_when_optional_keys_missing(tmp_path: Path) -> None:
     assert cfg.status_retry_polls == 10
     assert cfg.idle_minutes == 60
     assert cfg.stop == []
+    assert cfg.launch_backoff_seconds == 60
+    assert cfg.max_launch_failures == 6
 
 
 def test_relative_repo_resolved_against_run_dir(tmp_path: Path) -> None:
@@ -247,6 +249,18 @@ def test_command_prefix_quotes_part_with_space() -> None:
 def test_status_retry_polls_zero_is_rejected(tmp_path: Path) -> None:
     _write(tmp_path, MINIMAL + "\n[agent]\nstatus_retry_polls = 0\n")
     with pytest.raises(ConfigError, match="invalid value for 'agent.status_retry_polls'"):
+        load_config(tmp_path)
+
+
+def test_launch_backoff_seconds_zero_is_rejected(tmp_path: Path) -> None:
+    _write(tmp_path, MINIMAL + "\n[agent]\nlaunch_backoff_seconds = 0\n")
+    with pytest.raises(ConfigError, match="invalid value for 'agent.launch_backoff_seconds'"):
+        load_config(tmp_path)
+
+
+def test_max_launch_failures_zero_is_rejected(tmp_path: Path) -> None:
+    _write(tmp_path, MINIMAL + "\n[agent]\nmax_launch_failures = 0\n")
+    with pytest.raises(ConfigError, match="invalid value for 'agent.max_launch_failures'"):
         load_config(tmp_path)
 
 
