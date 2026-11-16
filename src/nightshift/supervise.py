@@ -133,6 +133,21 @@ def _release_lock(lock_path: Path) -> None:
         lock_path.unlink()
 
 
+def read_supervisor_events(run_dir: Path) -> list[dict[str, str]]:
+    """Return every supervisor event from .gate/supervise.jsonl as {t, msg}, skipping bad lines."""
+    path = run_dir / ".gate" / "supervise.jsonl"
+    if not path.is_file():
+        return []
+    events: list[dict[str, str]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(event, dict) and "t" in event and "msg" in event:
+            events.append({"t": str(event["t"]), "msg": str(event["msg"])})
+    return events
+
 
 def supervise(
     config: RunConfig,

@@ -7,6 +7,14 @@ from nightshift.gate import last_gate_line
 from nightshift.git import run_git
 from nightshift.items import load_items
 from nightshift.progress import read_progress
+from nightshift.supervise import read_supervisor_events
+
+_SUPERVISOR_PREFIXES: tuple[tuple[str, str], ...] = (
+    ("session ", "session"),
+    ("agent did not start", "failed start"),
+    ("agent looks stuck", "stuck report"),
+    ("agent status unknown for", "unreadable-status give-up"),
+)
 
 
 def build_report(run_dir: Path) -> str:
@@ -41,6 +49,7 @@ def build_report(run_dir: Path) -> str:
     gate_line = last_gate_line(run_dir)
     if gate_line != "last gate: none":
         lines.append(gate_line)
+    lines.extend(_supervisor_lines(run_dir))
     _append_section(lines, run_dir / "BUGS.md", "Bugs found")
     _append_section(lines, run_dir / "IDEAS.md", "Ideas")
     return "\n".join(lines) + "\n"
@@ -69,6 +78,21 @@ def _append_section(lines: list[str], path: Path, title: str) -> None:
     lines.append("")
     lines.append(f"## {title}")
     lines.extend(note_lines)
+
+
+def _supervisor_lines(run_dir: Path) -> list[str]:
+    """Return the '## Supervisor' section lines, or none when no event count is nonzero."""
+    events = read_supervisor_events(run_dir)
+    kept: list[tuple[int, str]] = []
+    for prefix, label in _SUPERVISOR_PREFIXES:
+        count = sum(1 for event in events if event["msg"].startswith(prefix))
+        if count:
+            kept.append((count, f"{label}s" if count != 1 else label))
+    if not kept:
+        return []
+    lines = ["", "## Supervisor"]
+    lines.extend(f"- {count} {label}" for count, label in kept)
+    return lines
 
 
 def _format_minutes(seconds: int) -> str:

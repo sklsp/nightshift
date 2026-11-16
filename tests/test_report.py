@@ -1,5 +1,6 @@
 """Tests for the nightshift report command."""
 
+import json
 import os
 import shutil
 import subprocess
@@ -76,6 +77,18 @@ _PROGRESS_MD = (
     "- [x] T2. second item\n"
     "- [ ] T3. third item BLOCKED\n"
 )
+
+
+def _event(stamp: str, msg: str) -> str:
+    """One supervise.jsonl line."""
+    return json.dumps({"t": stamp, "msg": msg})
+
+
+def _write_supervise_log(run_dir: Path, lines: list[str]) -> None:
+    """Write .gate/supervise.jsonl with the given raw lines."""
+    gate_dir = run_dir / ".gate"
+    gate_dir.mkdir(exist_ok=True)
+    (gate_dir / "supervise.jsonl").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def test_report_lists_items_with_commits_and_blocked(
@@ -277,3 +290,133 @@ def test_report_skips_blocked_items_for_durations(
         f"- T3 third item: {_short_hash(repo, 'HEAD')} (38 min)\n"
         "run time: 38 min (first to last item commit)\n"
     )
+
+
+def test_report_supervisor_section_from_mixed_log(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo, run_dir = _run_dir(
+        tmp_path,
+        "# Items for the rep run\n\n## first item\nDo it.\n",
+        "- [x] T1. first item\n",
+    )
+    (run_dir / "BUGS.md").write_text("# Bugs\n\ncrash on empty input\n", encoding="utf-8")
+    _write_supervise_log(
+        run_dir,
+        [
+            _event("2026-11-15T23:00:00", "session 1 ended: 0/1 done, 0 blocked"),
+            _event("2026-11-15T23:05:00", "agent did not start"),
+            _event("2026-11-15T23:10:00", "session 2 ended: 1/1 done, 0 blocked"),
+            _event(
+                "2026-11-15T23:15:00",
+                "agent looks stuck: no commit and no file change for 60 minutes",
+            ),
+            _event("2026-11-15T23:20:00", "session 3 ended: 1/1 done, 0 blocked"),
+            _event("2026-11-15T23:25:00", "agent did not start"),
+            _event(
+                "2026-11-15T23:30:00",
+                "agent status unknown for 10 polls; treating the session as ended",
+            ),
+        ],
+    )
+
+    code = main(["report", str(run_dir)])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert out == (
+        "# rep: 1/1 items\n"
+        "- T1 first item: not committed\n"
+        "\n"
+        "## Supervisor\n"
+        "- 3 sessions\n"
+        "- 2 failed starts\n"
+        "- 1 stuck report\n"
+        "- 1 unreadable-status give-up\n"
+        "\n"
+        "## Bugs found\n"
+        "crash on empty input\n"
+    )
+
+
+def test_report_supervisor_plural_labels(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo, run_dir = _run_dir(
+        tmp_path,
+        "# Items for the rep run\n\n## first item\nDo it.\n",
+        "- [x] T1. first item\n",
+    )
+    lines = []
+    for i in range(2):
+        stamp = f"2026-11-15T23:{i * 4:02d}:00"
+        lines.append(_event(stamp, f"session {i + 1} ended: 0/1 done, 0 blocked"))
+        lines.append(_event(f"2026-11-15T23:{i * 4 + 1:02d}:00", "agent did not start"))
+        lines.append(
+            _event(
+                f"2026-11-15T23:{i * 4 + 2:02d}:00",
+                "agent looks stuck: no commit and no file change for 60 minutes",
+            )
+        )
+        lines.append(
+            _event(
+                f"2026-11-15T23:{i * 4 + 3:02d}:00",
+                "agent status unknown for 10 polls; treating the session as ended",
+            )
+        )
+    _write_supervise_log(run_dir, lines)
+
+    code = main(["report", str(run_dir)])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert out == (
+        "# rep: 1/1 items\n"
+        "- T1 first item: not committed\n"
+        "\n"
+        "## Supervisor\n"
+        "- 2 sessions\n"
+        "- 2 failed starts\n"
+        "- 2 stuck reports\n"
+        "- 2 unreadable-status give-ups\n"
+    )
+
+
+def test_report_without_supervise_log_has_no_section(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo, run_dir = _run_dir(
+        tmp_path,
+        "# Items for the rep run\n\n## first item\nDo it.\n",
+        "- [x] T1. first item\n",
+    )
+
+    code = main(["report", str(run_dir)])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "Supervisor" not in out
+
+
+def test_report_supervise_log_with_only_other_events_gives_no_section(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo, run_dir = _run_dir(
+        tmp_path,
+        "# Items for the rep run\n\n## first item\nDo it.\n",
+        "- [x] T1. first item\n",
+    )
+    _write_supervise_log(
+        run_dir,
+        [
+            _event("2026-11-15T23:00:00", "agent launch exited with code 1"),
+            "{not json",
+            _event("2026-11-15T23:05:00", "stopped after 20 sessions without finishing; a human should look"),
+        ],
+    )
+
+    code = main(["report", str(run_dir)])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "Supervisor" not in out
