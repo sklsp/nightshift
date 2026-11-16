@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.12.1
+
+- watch: when an item finishes, watch polls one last time before ending, so a commit made after progress finished (the final tick) is printed before the finished line
+- supervise: new [agent] launch_ok_codes lists exit codes of the launch command that are not worth a log line; Cline exits with code 1 even when the session starts fine, and every other code is logged as before
+- release: version 0.12.1 and this changelog; both fixes came from the first runs nightshift drove alone (two Iris runs on 2026-11-16)
+
 ## 0.12.0
 
 - templates: a project can bring its own start.md and item.md; set templates in [run] to a directory relative to the run dir or an absolute path, any file you do not provide falls back to the built-in one, and an unknown placeholder raises a RenderError naming the template file and the placeholder
