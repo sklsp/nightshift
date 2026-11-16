@@ -1,3 +1,0 @@
-- [x] T1. tests: the wheel contains what the code needs (239 passed in 18.54s)
-- [x] T2. README: install and a quick start that is checked (240 passed in 18.68s)
-- [x] T3. release 0.12.3 (240 passed in 18.93s)
