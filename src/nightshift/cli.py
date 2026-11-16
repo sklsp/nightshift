@@ -14,7 +14,7 @@ from nightshift.commits import CommitError, commit_report
 from nightshift.config import ConfigError, RunConfig, load_config
 from nightshift.gate import clean, file, last_gate_line, start, state, wait
 from nightshift.git import run_git
-from nightshift.items import ItemsError, load_items
+from nightshift.items import Item, ItemsError, load_items
 from nightshift.progress import Progress, read_progress
 from nightshift.render import RenderError, render_run
 from nightshift.report import build_report, format_minutes
@@ -32,6 +32,7 @@ repo = ".."           # path to the repo root, relative to this run dir or absol
 # branch = ""         # when set, refuse to start unless the repo is on this branch
 # prefix = "T"        # item id prefix: T1, T2, ...
 # command = ["nightshift"]  # program the spec tells the agent to run; full path plus -m nightshift when not on PATH
+# templates = ""      # directory of your own start.md / item.md templates, relative to this run dir or absolute
 
 [check]
 test = ["pytest"]        # test command run from the repo root; no -q here, see "Never -q twice" in docs/LESSONS.md
@@ -251,13 +252,28 @@ def _doctor(run_dir: Path) -> int:
     if config is None:
         return 1
 
+    items: list[Item] | None = None
     try:
         items = load_items(run_dir)
         with TemporaryDirectory() as tmp:
-            render_run(config, items, Path(tmp))
+            render_run(config, items, Path(tmp), run_dir=run_dir)
         report("items.md", True)
     except (ItemsError, RenderError) as exc:
         report("items.md", False, str(exc))
+
+    if config.templates and items is not None:
+        templates_dir = Path(config.templates)
+        if not templates_dir.is_absolute():
+            templates_dir = run_dir / templates_dir
+        if not templates_dir.is_dir():
+            report("templates", False, f"directory missing: {templates_dir}")
+        else:
+            try:
+                with TemporaryDirectory() as tmp:
+                    render_run(config, items, Path(tmp), run_dir=run_dir)
+                report("templates", True)
+            except RenderError as exc:
+                report("templates", False, str(exc))
 
     repo_result = _repo_check(config.repo)
     if repo_result is None:

@@ -86,6 +86,36 @@ myrun/                  the run directory, outside the repo
 <repo>/PROGRESS-myrun.md   in the repo root; ticked with each commit
 ```
 
+## Your own templates
+
+`nightshift build` renders `00-start.md` and the item files from two built-in templates in the package. To change their wording, put your own copies named `start.md` and `item.md` into a directory (for example `<run dir>/tpl`) and set `templates = "tpl"` under `[run]`; any file you do not provide falls back to the built-in one. The placeholders each template receives:
+
+- start.md
+  - `$name`: the run name from `run.name`.
+  - `$branch`: the branch the agent must work on; the repo's current branch when unset, then "main".
+  - `$prefix`: item id prefix (T1, T2, ...).
+  - `$total`: how many items the run has.
+  - `$first_item`: path of the first item file in the run dir.
+  - `$items_list`: one line per item file path.
+  - `$checklist_file`: path of checklist.txt in the run dir.
+  - `$progress_file`: path of PROGRESS-<name>.md in the repo root.
+  - `$check_command`: the check command (lint, pre and test) as one line.
+  - `$command`: the nightshift command prefix from `run.command`.
+  - `$run_dir`: absolute path of the run directory.
+  - `$timeout_hint`: per-command time limit in seconds from `check.timeout_hint_seconds`.
+- item.md
+  - `$name`: the run name from `run.name`.
+  - `$number`: this item's number.
+  - `$total`: how many items the run has.
+  - `$title`: the item title from its `##` heading in items.md.
+  - `$body`: the item body text from items.md.
+  - `$id`: the item id (prefix plus number, for example T1).
+  - `$start_file`: path of 00-start.md in the run dir.
+  - `$progress_file`: path of PROGRESS-<name>.md in the repo root.
+  - `$command`: the nightshift command prefix from `run.command`.
+  - `$ending`: "send the final message" on the last item, otherwise "open the next item file".
+  - `$run_dir`: absolute path of the run directory.
+
 ## Config reference (run.toml)
 
 | key | default | meaning |
@@ -95,6 +125,7 @@ myrun/                  the run directory, outside the repo
 | `run.branch` | `""` | when set, refuse to start unless the repo is on this branch (checked by supervise and doctor) |
 | `run.prefix` | `"T"` | item id prefix: T1, T2, ... |
 | `run.command` | `["nightshift"]` | program the rendered spec tells the agent to run; for example `["W:/nightshift/.venv/Scripts/python.exe", "-m", "nightshift"]` when it is not on PATH |
+| `run.templates` | `""` | directory of your own start.md and item.md templates, relative to this run dir or absolute; see "Your own templates" |
 | `check.test` | required | test command, run from the repo root |
 | `check.lint` | `[]` | optional lint command that must pass before tests start |
 | `check.pre` | `[]` | extra commands run after lint and before the tests, each a list of strings; first failure stops the start |

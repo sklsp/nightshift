@@ -185,6 +185,56 @@ def test_doctor_missing_agent_programs_report_problems(
     assert "problem: agent status: install no-such-status-xyz or put it on PATH" in lines
 
 
+def _write_templates(run_dir: Path, start_md: str = "Start $name.\n", item_md: str = "Item $id.\n") -> None:
+    """Create a templates dir with both template files under the run dir."""
+    tpl = run_dir / "tpl"
+    tpl.mkdir()
+    (tpl / "start.md").write_text(start_md, encoding="utf-8")
+    (tpl / "item.md").write_text(item_md, encoding="utf-8")
+
+
+def test_doctor_templates_ok(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    run_dir = _healthy_run(tmp_path)
+    _write_templates(run_dir)
+    _rewrite_toml(run_dir, 'name = "doc"\n', 'name = "doc"\ntemplates = "tpl"\n')
+
+    code = main(["doctor", str(run_dir)])
+
+    lines = capsys.readouterr().out.splitlines()
+    assert code == 0
+    assert lines == [
+        "ok: run.toml",
+        "ok: items.md",
+        "ok: templates",
+        "ok: repo",
+        "ok: test command",
+        "ok: timing",
+    ]
+
+
+def test_doctor_templates_missing_directory(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    run_dir = _healthy_run(tmp_path)
+    _rewrite_toml(run_dir, 'name = "doc"\n', 'name = "doc"\ntemplates = "no-such-dir"\n')
+
+    code = main(["doctor", str(run_dir)])
+
+    lines = capsys.readouterr().out.splitlines()
+    assert code == 1
+    assert f"problem: templates: directory missing: {run_dir / 'no-such-dir'}" in lines
+
+
+def test_doctor_templates_bad_placeholder(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    run_dir = _healthy_run(tmp_path)
+    _write_templates(run_dir, start_md="Start $bogus.\n")
+    _rewrite_toml(run_dir, 'name = "doc"\n', 'name = "doc"\ntemplates = "tpl"\n')
+
+    code = main(["doctor", str(run_dir)])
+
+    lines = capsys.readouterr().out.splitlines()
+    assert code == 1
+    assert "problem: templates: unknown placeholder $bogus in start.md" in lines
+
+
 def test_doctor_wait_seconds_not_below_timeout_hint(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

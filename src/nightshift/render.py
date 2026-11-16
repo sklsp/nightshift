@@ -14,18 +14,21 @@ class RenderError(Exception):
     """Raised when rendered files fail the text check."""
 
 
-def render_run(config: RunConfig, items: list[Item], out_dir: Path) -> list[Path]:
-    """Write 00-start.md, one file per item and checklist.txt into out_dir."""
-    run_dir = out_dir.resolve()
-    templates_dir = _templates_dir(config, run_dir)
+def render_run(config: RunConfig, items: list[Item], out_dir: Path, *, run_dir: Path | None = None) -> list[Path]:
+    """Write 00-start.md, one file per item and checklist.txt into out_dir.
+
+    Relative template paths resolve against run_dir when given, else against out_dir.
+    """
+    spec_dir = (run_dir if run_dir is not None else out_dir).resolve()
+    templates_dir = _templates_dir(config, spec_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     written = [out_dir / "00-start.md"]
-    written[0].write_text(_start_text(config, len(items), run_dir, templates_dir), encoding="utf-8", newline="\n")
+    written[0].write_text(_start_text(config, len(items), spec_dir, templates_dir), encoding="utf-8", newline="\n")
 
     total = len(items)
     for item in items:
         path = out_dir / f"item-{item.number:02d}.md"
-        path.write_text(_item_text(config, item, total, run_dir, templates_dir), encoding="utf-8", newline="\n")
+        path.write_text(_item_text(config, item, total, spec_dir, templates_dir), encoding="utf-8", newline="\n")
         written.append(path)
 
     checklist = [f"- [ ] {config.prefix}{item.number}. {item.title}" for item in items]
