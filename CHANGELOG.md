@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.0
+
+- supervise: appends one JSON object per poll event to .gate/supervise.jsonl, so a finished run leaves an audit trail of what the supervisor saw
+- status: shows a Supervisor: section with the last five events from that log when it has entries, and --json carries them under an events key
+- report: shows how long each item took from its commit times and a run time line from first to last item commit
+- release: version 0.8.0 and this changelog
+
 ## 0.7.0
 
 - agent: a failed status check is unknown, not stopped (is_running returns None instead of False when the command fails or times out)

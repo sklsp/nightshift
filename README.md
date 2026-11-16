@@ -39,6 +39,8 @@ Python 3.11 or newer; no other dependencies. This puts `nightshift` on your PATH
 
 The supervisor survives a machine that refuses to start processes: an unreadable status is treated as unknown and a failed launch is retried with backoff; see `agent.launch_backoff_seconds` and `agent.max_launch_failures` in the config reference.
 
+The supervisor appends one JSON object per poll event to `myrun/.gate/supervise.jsonl`, so a finished run leaves an audit trail of what it saw. When that log has entries, `status` adds a Supervisor: section with the last five events, one per line. And `report` shows how long each item took from its commit times plus a run time line from first to last item commit.
+
 ## The gate
 
 Agent terminals kill any command that runs longer than about 30 seconds. The gate starts a check in a detached process instead; each call returns within the limit and picks the result up from files:
