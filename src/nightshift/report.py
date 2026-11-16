@@ -18,15 +18,26 @@ def build_report(run_dir: Path) -> str:
     commits = _commit_lines(config.repo)
 
     lines: list[str] = [f"# {config.name}: {len(progress.done)}/{progress.total} items"]
+    committed_times: list[int] = []
     for item in items:
         marker = f"{config.prefix}{item.number}"
         if item.number in progress.blocked:
             state_text = "BLOCKED"
         else:
-            commit_hash = _find_commit(commits, f"{marker}:")
-            state_text = commit_hash or "not committed"
+            found = _find_commit(commits, f"{marker}:")
+            if found is None:
+                state_text = "not committed"
+            else:
+                commit_hash, commit_time = found
+                state_text = commit_hash
+                if committed_times:
+                    state_text += f" ({_format_minutes(commit_time - committed_times[-1])})"
+                committed_times.append(commit_time)
         lines.append(f"- {marker} {item.title}: {state_text}")
 
+    if len(committed_times) >= 2:
+        run_seconds = committed_times[-1] - committed_times[0]
+        lines.append(f"run time: {_format_minutes(run_seconds)} (first to last item commit)")
     gate_line = last_gate_line(run_dir)
     if gate_line != "last gate: none":
         lines.append(gate_line)
@@ -60,11 +71,20 @@ def _append_section(lines: list[str], path: Path, title: str) -> None:
     lines.extend(note_lines)
 
 
-def _commit_lines(repo: Path) -> list[tuple[str, str]]:
-    """Return (hash, subject) for every commit of repo, newest first; empty when git is missing."""
+def _format_minutes(seconds: int) -> str:
+    """Format a duration rounded to whole minutes, like '38 min' or '1 h 12 min'."""
+    total = (seconds + 30) // 60
+    if total < 60:
+        return f"{total} min"
+    hours, rest = divmod(total, 60)
+    return f"{hours} h {rest} min"
+
+
+def _commit_lines(repo: Path) -> list[tuple[str, int, str]]:
+    """Return (hash, unix time, subject) for every commit of repo, newest first; empty when git is missing."""
     try:
         result = subprocess.run(
-            ["git", "-C", str(repo), "log", "--format=%h %s"],
+            ["git", "-C", str(repo), "log", "--format=%h %ct %s"],
             capture_output=True,
             text=True,
             stdin=subprocess.DEVNULL,
@@ -73,16 +93,17 @@ def _commit_lines(repo: Path) -> list[tuple[str, str]]:
         return []
     if result.returncode != 0 or not result.stdout.strip():
         return []
-    pairs: list[tuple[str, str]] = []
+    triples: list[tuple[str, int, str]] = []
     for line in result.stdout.rstrip("\n").splitlines():
-        commit_hash, _, subject = line.partition(" ")
-        pairs.append((commit_hash, subject))
-    return pairs
+        commit_hash, _, rest = line.partition(" ")
+        unix_time_text, _, subject = rest.partition(" ")
+        triples.append((commit_hash, int(unix_time_text), subject))
+    return triples
 
 
-def _find_commit(commits: list[tuple[str, str]], prefix: str) -> str | None:
-    """Return the hash of the newest commit whose subject starts with prefix."""
-    for commit_hash, subject in commits:
+def _find_commit(commits: list[tuple[str, int, str]], prefix: str) -> tuple[str, int] | None:
+    """Return (hash, unix time) of the newest commit whose subject starts with prefix."""
+    for commit_hash, unix_time, subject in commits:
         if subject.startswith(prefix):
-            return commit_hash
+            return (commit_hash, unix_time)
     return None

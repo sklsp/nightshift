@@ -1,5 +1,6 @@
 """Tests for the nightshift report command."""
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -22,6 +23,17 @@ def _short_hash(repo: Path, ref: str) -> str:
     )
     assert result.returncode == 0, result.stderr
     return result.stdout.strip()
+
+
+def _dated_commit(repo: Path, filename: str, content: str, when: str, message: str) -> None:
+    """Commit one file in repo with fixed author and committer dates."""
+    (repo / filename).write_text(content, encoding="utf-8")
+    _git(repo, "add", filename)
+    env = os.environ | {"GIT_AUTHOR_DATE": when, "GIT_COMMITTER_DATE": when}
+    result = subprocess.run(
+        ["git", "commit", "-q", "-m", message], cwd=repo, capture_output=True, text=True, env=env
+    )
+    assert result.returncode == 0, f"git commit failed: {result.stderr}"
 
 
 def _run_dir(tmp_path: Path, items_md: str, progress_md: str | None = None) -> tuple[Path, Path]:
@@ -70,12 +82,8 @@ def test_report_lists_items_with_commits_and_blocked(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     repo, run_dir = _run_dir(tmp_path, _ITEMS_MD, _PROGRESS_MD)
-    (repo / "one.txt").write_text("one\n", encoding="utf-8")
-    _git(repo, "add", "one.txt")
-    _git(repo, "commit", "-q", "-m", "T1: first item")
-    (repo / "two.txt").write_text("two\n", encoding="utf-8")
-    _git(repo, "add", "two.txt")
-    _git(repo, "commit", "-q", "-m", "T2: second item")
+    _dated_commit(repo, "one.txt", "one\n", "2026-11-15T23:00:00", "T1: first item")
+    _dated_commit(repo, "two.txt", "two\n", "2026-11-15T23:38:00", "T2: second item")
 
     code = main(["report", str(run_dir)])
 
@@ -84,8 +92,9 @@ def test_report_lists_items_with_commits_and_blocked(
     assert out == (
         "# rep: 2/3 items\n"
         f"- T1 first item: {_short_hash(repo, 'HEAD~1')}\n"
-        f"- T2 second item: {_short_hash(repo, 'HEAD')}\n"
+        f"- T2 second item: {_short_hash(repo, 'HEAD')} (38 min)\n"
         "- T3 third item: BLOCKED\n"
+        "run time: 38 min (first to last item commit)\n"
     )
 
 
@@ -198,3 +207,73 @@ def test_report_empty_notes_files_give_no_sections(
     out = capsys.readouterr().out
     assert code == 0
     assert out == "# rep: 1/1 items\n- T1 first item: not committed\n"
+
+
+def test_report_shows_hours_for_longer_durations(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo, run_dir = _run_dir(
+        tmp_path,
+        _ITEMS_MD,
+        "# rep\n\n- [x] T1. first item\n- [x] T2. second item\n- [x] T3. third item\n",
+    )
+    _dated_commit(repo, "one.txt", "one\n", "2026-11-15T23:00:00", "T1: first item")
+    _dated_commit(repo, "two.txt", "two\n", "2026-11-15T23:38:00", "T2: second item")
+    _dated_commit(repo, "three.txt", "three\n", "2026-11-16T00:50:00", "T3: third item")
+
+    code = main(["report", str(run_dir)])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert out == (
+        "# rep: 3/3 items\n"
+        f"- T1 first item: {_short_hash(repo, 'HEAD~2')}\n"
+        f"- T2 second item: {_short_hash(repo, 'HEAD~1')} (38 min)\n"
+        f"- T3 third item: {_short_hash(repo, 'HEAD')} (1 h 12 min)\n"
+        "run time: 1 h 50 min (first to last item commit)\n"
+    )
+
+
+def test_report_single_commit_has_no_run_time(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo, run_dir = _run_dir(
+        tmp_path,
+        "# Items for the rep run\n\n## first item\nDo it.\n\n## second item\nDo that.\n",
+        "- [x] T1. first item\n- [ ] T2. second item\n",
+    )
+    _dated_commit(repo, "one.txt", "one\n", "2026-11-15T23:00:00", "T1: first item")
+
+    code = main(["report", str(run_dir)])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert out == (
+        "# rep: 1/2 items\n"
+        f"- T1 first item: {_short_hash(repo, 'HEAD')}\n"
+        "- T2 second item: not committed\n"
+    )
+
+
+def test_report_skips_blocked_items_for_durations(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo, run_dir = _run_dir(
+        tmp_path,
+        _ITEMS_MD,
+        "# rep\n\n- [x] T1. first item\n- [ ] T2. second item BLOCKED\n- [x] T3. third item\n",
+    )
+    _dated_commit(repo, "one.txt", "one\n", "2026-11-15T23:00:00", "T1: first item")
+    _dated_commit(repo, "three.txt", "three\n", "2026-11-15T23:38:00", "T3: third item")
+
+    code = main(["report", str(run_dir)])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert out == (
+        "# rep: 2/3 items\n"
+        f"- T1 first item: {_short_hash(repo, 'HEAD~1')}\n"
+        "- T2 second item: BLOCKED\n"
+        f"- T3 third item: {_short_hash(repo, 'HEAD')} (38 min)\n"
+        "run time: 38 min (first to last item commit)\n"
+    )
