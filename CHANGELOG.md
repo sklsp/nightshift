@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.12.2
+
+- docs: new docs/ARCHITECTURE.md explains how nightshift works inside from the code: the life of a run with a mermaid sequence diagram, one line per module, the supervisor's rules and why each exists, and the files a run leaves behind; README links it near the top
+- release: version 0.12.2 and this changelog
+
 ## 0.12.1
 
 - watch: when an item finishes, watch polls one last time before ending, so a commit made after progress finished (the final tick) is printed before the finished line
