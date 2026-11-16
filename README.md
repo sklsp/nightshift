@@ -7,13 +7,21 @@ docs/ARCHITECTURE.md explains how nightshift works inside: the life of a run, ev
 
 ## Install
 
+From the repository:
+
 ```
-pip install .
+pip install git+https://github.com/sklsp/nightshift
+```
+
+For development, from a clone of the repo:
+
+```
+pip install -e .[dev]
 ```
 
 Python 3.11 or newer; no other dependencies. This puts `nightshift` on your PATH.
 
-## Quickstart
+## Quick start
 
 1. Create a run directory:
 
@@ -23,21 +31,29 @@ Python 3.11 or newer; no other dependencies. This puts `nightshift` on your PATH
 
    This writes `myrun/run.toml` (every key shown, commented) and an example `myrun/items.md`.
 2. Edit the two files: point `repo` at your repo, set the test command in `[check]`, then write one item per section in items.md (`## title` plus a body).
-3. Render the run files:
+3. Check that config, items, repo and test program are ready before starting:
+
+   ```
+   nightshift doctor myrun
+   ```
+
+4. Render the run files:
 
    ```
    nightshift build myrun
    ```
 
-4. Point your agent at `myrun/00-start.md` and let it work, or drive it yourself with the supervisor:
+5. Point your agent at `myrun/00-start.md` and let it work, or drive it yourself with the supervisor; in another terminal, watch progress as it happens:
 
    ```
-   nightshift doctor myrun          # check config, items, repo and test program before starting
    nightshift supervise myrun
-   nightshift status myrun
-   nightshift status myrun --json   # the same summary as one JSON object
-   nightshift report myrun          # markdown summary of a finished run for a pull request body
-    nightshift commits myrun         # check that each item has exactly one well-formed commit
+   nightshift watch myrun
+   ```
+
+6. When every item is ticked, print a markdown summary for a pull request body:
+
+   ```
+   nightshift report myrun
    ```
 
 To run several runs back to back, use `nightshift queue <run dir> [<run dir> ...]`: it first checks that every run dir exists with a run.toml, then supervises them in order and stops at the first non-zero exit code.
