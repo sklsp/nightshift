@@ -133,6 +133,7 @@ myrun/                  the run directory, outside the repo
 | `check.wait_seconds` | `25` | how long one `gate wait` call may block |
 | `check.timeout_hint_seconds` | `30` | the command time limit the agent works under (informational) |
 | `agent.launch` | `[]` | command that starts one agent session; `{message}` is replaced by the resume message |
+| `agent.launch_ok_codes` | `[0]` | launch exit codes that do not get a log line; any other code is logged |
 | `agent.status` | `[]` | command whose output the supervisor polls for a live agent |
 | `agent.running_pattern` | `"running"` | substring in status output meaning the agent is alive |
 | `agent.poll_seconds` | `30` | how often the supervisor checks the agent and progress |

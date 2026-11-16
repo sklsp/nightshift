@@ -230,7 +230,7 @@ def supervise(
                 status = _status()
             if status is False:
                 code = agent.launch(config, message)
-                if code != 0:
+                if code not in config.launch_ok_codes:
                     _log_with_events(f"agent launch exited with code {agent.format_exit_code(code)}")
                 started = False
                 for _poll in range(config.launch_grace_polls):

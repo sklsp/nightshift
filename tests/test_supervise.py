@@ -4,6 +4,7 @@ import json
 import os
 import subprocess
 import sys
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
@@ -295,6 +296,51 @@ def test_repeated_failed_starts_end_with_exit_code_two(tmp_path: Path, monkeypat
     # The default cap is six failed starts; the supervisor gives up and asks for a human.
     assert len(launches) == 6
     assert logs[-1] == "agent cannot be launched after 6 tries; a human should look"
+
+
+def test_launch_code_in_ok_codes_is_not_logged(tmp_path: Path, monkeypatch) -> None:
+    config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5)
+    config = replace(config, launch_ok_codes=[0, 1])
+    clock = Clock()
+    calls = {"n": 0}
+
+    def fake_is_running(cfg: RunConfig, quiet: bool = False) -> bool:
+        calls["n"] += 1
+        if calls["n"] == 3:
+            (config.repo / "PROGRESS-sup.md").write_text(_TICKED, encoding="utf-8")
+        return calls["n"] in (2, 3)
+
+    monkeypatch.setattr(agent_module, "is_running", fake_is_running)
+    # Cline exits with code 1 even when the session starts fine; [0, 1] keeps that out of the log.
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 1)
+
+    logs: list[str] = []
+    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+
+    assert code == 0
+    assert logs == ["session 1 ended: 2/2 done, 0 blocked"]
+
+
+def test_launch_code_outside_ok_codes_is_logged(tmp_path: Path, monkeypatch) -> None:
+    config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5)
+    clock = Clock()
+    calls = {"n": 0}
+
+    def fake_is_running(cfg: RunConfig, quiet: bool = False) -> bool:
+        calls["n"] += 1
+        if calls["n"] == 3:
+            (config.repo / "PROGRESS-sup.md").write_text(_TICKED, encoding="utf-8")
+        return calls["n"] in (2, 3)
+
+    monkeypatch.setattr(agent_module, "is_running", fake_is_running)
+    # The default ok codes are [0], so a launch that exits with code 1 is logged as before.
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 1)
+
+    logs: list[str] = []
+    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+
+    assert code == 0
+    assert logs == ["agent launch exited with code 1", "session 1 ended: 2/2 done, 0 blocked"]
 
 
 def test_launch_backoff_is_capped_at_fifteen_minutes(tmp_path: Path, monkeypatch) -> None:

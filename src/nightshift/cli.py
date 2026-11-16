@@ -44,6 +44,7 @@ test = ["pytest"]        # test command run from the repo root; no -q here, see 
 
 [agent]
 # launch = []                 # optional command to start the agent (supervisor)
+# launch_ok_codes = [0]       # exit codes of the launch command that are not worth a log line
 # status = []                 # optional command that prints agent status lines
 # running_pattern = "running"  # substring in status output meaning the agent is alive
 # poll_seconds = 30           # supervisor poll interval

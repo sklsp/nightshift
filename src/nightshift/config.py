@@ -37,6 +37,7 @@ class RunConfig:
     stop: list[str] = field(default_factory=list)
     launch_backoff_seconds: int = 60
     max_launch_failures: int = 6
+    launch_ok_codes: list[int] = field(default_factory=lambda: [0])
 
 
 _SECTIONS = ("run", "check", "agent")
@@ -55,6 +56,7 @@ _AGENT_KEYS = {
     "stop",
     "launch_backoff_seconds",
     "max_launch_failures",
+    "launch_ok_codes",
 }
 
 
@@ -120,6 +122,7 @@ def load_config(run_dir: Path) -> RunConfig:
         raise ConfigError("invalid value for 'agent.launch_backoff_seconds': must be at least 1")
     if max_launch_failures < 1:
         raise ConfigError("invalid value for 'agent.max_launch_failures': must be at least 1")
+    launch_ok_codes = _int_list(agent, "agent", "launch_ok_codes", [0])
 
     return RunConfig(
         name=name,
@@ -145,6 +148,7 @@ def load_config(run_dir: Path) -> RunConfig:
         stop=stop,
         launch_backoff_seconds=launch_backoff_seconds,
         max_launch_failures=max_launch_failures,
+        launch_ok_codes=launch_ok_codes,
     )
 
 
@@ -191,6 +195,16 @@ def _int(table: dict[str, object], where: str, key: str, default: int) -> int:
     if isinstance(value, bool) or not isinstance(value, int):
         raise ConfigError(f"wrong type for '{where}.{key}': expected int")
     return value
+
+
+def _int_list(table: dict[str, object], where: str, key: str, default: list[int]) -> list[int]:
+    """Return a list of integers or its default when the key is absent."""
+    if key not in table:
+        return default
+    value = table[key]
+    if not isinstance(value, list) or any(isinstance(item, bool) or not isinstance(item, int) for item in value):
+        raise ConfigError(f"wrong type for '{where}.{key}': expected a list of integers")
+    return list(value)
 
 
 def _str_list(table: dict[str, object], where: str, key: str, default: list[str]) -> list[str]:

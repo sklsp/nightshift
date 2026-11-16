@@ -99,6 +99,7 @@ def test_defaults_when_optional_keys_missing(tmp_path: Path) -> None:
     assert cfg.stop == []
     assert cfg.launch_backoff_seconds == 60
     assert cfg.max_launch_failures == 6
+    assert cfg.launch_ok_codes == [0]
 
 
 def test_relative_repo_resolved_against_run_dir(tmp_path: Path) -> None:
@@ -267,6 +268,30 @@ def test_launch_backoff_seconds_zero_is_rejected(tmp_path: Path) -> None:
 def test_max_launch_failures_zero_is_rejected(tmp_path: Path) -> None:
     _write(tmp_path, MINIMAL + "\n[agent]\nmax_launch_failures = 0\n")
     with pytest.raises(ConfigError, match="invalid value for 'agent.max_launch_failures'"):
+        load_config(tmp_path)
+
+
+def test_launch_ok_codes_list_is_parsed(tmp_path: Path) -> None:
+    _write(tmp_path, MINIMAL + "\n[agent]\nlaunch_ok_codes = [0, 1]\n")
+    cfg = load_config(tmp_path)
+    assert cfg.launch_ok_codes == [0, 1]
+
+
+def test_launch_ok_codes_not_a_list_is_rejected(tmp_path: Path) -> None:
+    _write(tmp_path, MINIMAL + "\n[agent]\nlaunch_ok_codes = 1\n")
+    with pytest.raises(ConfigError, match="wrong type for 'agent.launch_ok_codes'"):
+        load_config(tmp_path)
+
+
+def test_launch_ok_codes_with_non_integer_is_rejected(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        MINIMAL + """
+[agent]
+launch_ok_codes = [0, "1"]
+""",
+    )
+    with pytest.raises(ConfigError, match="wrong type for 'agent.launch_ok_codes'"):
         load_config(tmp_path)
 
 
