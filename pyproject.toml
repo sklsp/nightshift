@@ -10,7 +10,7 @@ requires-python = ">=3.11"
 dependencies = []
 
 [project.optional-dependencies]
-dev = ["pytest", "ruff"]
+dev = ["pytest", "ruff", "mypy"]
 
 [project.scripts]
 nightshift = "nightshift.cli:main"
@@ -28,3 +28,4 @@ addopts = "-q"
 
 [tool.mypy]
 mypy_path = "src"
+strict = true

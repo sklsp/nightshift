@@ -23,6 +23,7 @@ import shutil
 import subprocess
 import sys
 import time
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
@@ -76,7 +77,7 @@ def _refresh_progress_copy(progress_file: Path, run_dir: Path) -> None:
         pass
 
 
-def _read_progress(progress_file: Path, prefix: str, run_dir: Path, log=_log) -> Progress:
+def _read_progress(progress_file: Path, prefix: str, run_dir: Path, log: Callable[[str], None] = _log) -> Progress:
     """Read progress from the repo file; when cleanup removed it, read the .gate copy instead."""
     if progress_file.is_file():
         return read_progress(progress_file, prefix)
@@ -143,7 +144,7 @@ def _lock_path(repo: Path) -> Path | None:
     return git_dir / _LOCK_NAME
 
 
-def _take_lock(lock_path: Path, run_dir: Path, log, alive) -> bool:
+def _take_lock(lock_path: Path, run_dir: Path, log: Callable[[str], None], alive: Callable[[int], bool]) -> bool:
     """Write our pid and run into the lock; return False when a live supervisor holds it."""
     if lock_path.is_file():
         try:
@@ -195,11 +196,11 @@ def supervise(
     config: RunConfig,
     run_dir: Path,
     *,
-    sleep=time.sleep,
-    now=time.time,
-    log=_log,
-    fingerprint=_repo_fingerprint,
-    alive=_pid_alive,
+    sleep: Callable[[float], None] = time.sleep,
+    now: Callable[[], float] = time.time,
+    log: Callable[[str], None] = _log,
+    fingerprint: Callable[[Path], str | None] = _repo_fingerprint,
+    alive: Callable[[int], bool] = _pid_alive,
 ) -> int:
     """Relaunch the agent until every item is done or a stop condition hits."""
     total = len(load_items(run_dir))
