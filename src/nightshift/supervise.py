@@ -5,11 +5,16 @@ re-reading the same files after its context was compacted, writing nothing.
 While the agent runs, the supervisor fingerprints the repo (HEAD plus git
 status) on every poll; if it does not change for idle_minutes the session is
 reported as stuck and, when configured, stopped.
+
+Every logged line is also appended to .gate/supervise.jsonl with a timestamp,
+so a run stays readable after the fact.
 """
 
+import json
 import shutil
 import subprocess
 import time
+from datetime import datetime
 from pathlib import Path
 
 from nightshift import agent
@@ -48,9 +53,14 @@ def _log(message: str) -> None:
 def _refresh_progress_copy(progress_file: Path, run_dir: Path) -> None:
     """Copy the repo progress file into .gate so a finished run stays finished if cleanup removes it."""
     target = run_dir / ".gate" / "progress.md"
-    if progress_file.is_file():
+    if not progress_file.is_file():
+        return
+    try:
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(progress_file, target)
+    except OSError:
+        # The copy is a fallback for later reads; an unwritable .gate must never stop the supervisor.
+        pass
 
 
 def _read_progress(progress_file: Path, prefix: str, run_dir: Path, log=_log) -> Progress:
@@ -82,6 +92,20 @@ def supervise(
         f"Do NOT call attempt_completion until item {total} is done."
     )
 
+    event_path = run_dir / ".gate" / "supervise.jsonl"
+
+    def _log_with_events(message: str) -> None:
+        """Print one supervisor line and append it to .gate/supervise.jsonl so a run is readable afterwards."""
+        log(message)
+        try:
+            event_path.parent.mkdir(parents=True, exist_ok=True)
+            stamp = datetime.fromtimestamp(now()).isoformat(timespec="seconds")
+            with event_path.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps({"t": stamp, "msg": message}) + "\n")
+        except OSError:
+            # The event log is only for reading the run afterwards; a broken .gate must never stop supervision.
+            pass
+
     last_poll = now() - config.poll_seconds  # allow an immediate first check
     empty_streak = 0
     launch_failures = 0
@@ -100,9 +124,11 @@ def supervise(
         if status is None:
             unknown_streak += 1
             if unknown_streak == config.status_retry_polls:
-                log(f"agent status unknown for {config.status_retry_polls} polls; treating the session as ended")
+                _log_with_events(
+                    f"agent status unknown for {config.status_retry_polls} polls; treating the session as ended"
+                )
         elif unknown_streak > 0:
-            log(f"agent status readable again after {unknown_streak} failed polls")
+            _log_with_events(f"agent status readable again after {unknown_streak} failed polls")
             unknown_streak = 0
         return status
 
@@ -119,7 +145,7 @@ def supervise(
         if status is False:
             code = agent.launch(config, message)
             if code != 0:
-                log(f"agent launch exited with code {agent.format_exit_code(code)}")
+                _log_with_events(f"agent launch exited with code {agent.format_exit_code(code)}")
             started = False
             for _poll in range(config.launch_grace_polls):
                 grace_status = _status()
@@ -129,10 +155,10 @@ def supervise(
                 if grace_status is None and _status_gave_up():
                     break
             if not started:
-                log("agent did not start")
+                _log_with_events("agent did not start")
                 launch_failures += 1
                 if launch_failures >= config.max_launch_failures:
-                    log(f"agent cannot be launched after {launch_failures} tries; a human should look")
+                    _log_with_events(f"agent cannot be launched after {launch_failures} tries; a human should look")
                     return 2
                 sleep(min(config.launch_backoff_seconds * (2 ** (launch_failures - 1)), 900))
                 continue
@@ -154,15 +180,15 @@ def supervise(
                 and not stuck_reported
                 and now() - fp_since >= config.idle_minutes * 60
             ):
-                log(f"agent looks stuck: no commit and no file change for {config.idle_minutes} minutes")
+                _log_with_events(f"agent looks stuck: no commit and no file change for {config.idle_minutes} minutes")
                 stuck_reported = True
                 agent.stop(config)
                 while True:
                     stop_status = _status()
                     if stop_status is False or (stop_status is None and _status_gave_up()):
                         break
-        progress = _read_progress(progress_path, config.prefix, run_dir, log)
-        log(f"session {session} ended: {len(progress.done)}/{total} done, {len(progress.blocked)} blocked")
+        progress = _read_progress(progress_path, config.prefix, run_dir, _log_with_events)
+        _log_with_events(f"session {session} ended: {len(progress.done)}/{total} done, {len(progress.blocked)} blocked")
         if progress.finished:
             return 0
         if len(progress.done) > last_done:
@@ -171,8 +197,8 @@ def supervise(
             empty_streak += 1
         last_done = len(progress.done)
         if empty_streak >= 3:
-            log("agent stuck: no new item done three times in a row; a human should look")
+            _log_with_events("agent stuck: no new item done three times in a row; a human should look")
             return 1
 
-    log(f"stopped after {config.max_sessions} sessions without finishing; a human should look")
+    _log_with_events(f"stopped after {config.max_sessions} sessions without finishing; a human should look")
     return 1

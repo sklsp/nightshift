@@ -1,6 +1,8 @@
 """Tests for the supervise loop."""
 
+import json
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import nightshift.agent as agent_module
@@ -576,3 +578,49 @@ def test_a_session_after_an_unknown_give_up_gets_a_fresh_budget(tmp_path: Path, 
 
     # Without the reset, session 2's first unknown poll would end it at once and never log the recovery.
     assert "agent status readable again after 1 failed polls" in logs
+
+
+def test_finished_run_writes_a_timestamped_event_log(tmp_path: Path, monkeypatch) -> None:
+    config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5)
+    clock = Clock()
+    calls = {"n": 0}
+
+    def fake_is_running(cfg: RunConfig, quiet: bool = False) -> bool | None:
+        calls["n"] += 1
+        if calls["n"] == 4:
+            (config.repo / "PROGRESS-sup.md").write_text(_TICKED, encoding="utf-8")
+        return [None, None, True, False][calls["n"] - 1]
+
+    monkeypatch.setattr(agent_module, "is_running", fake_is_running)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
+
+    logs: list[str] = []
+    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+
+    assert code == 0
+    events_path = run_dir / ".gate" / "supervise.jsonl"
+    lines = events_path.read_text(encoding="utf-8").splitlines()
+    # One event per logged line, in order; the stamps are the fake clock at each log call (polls of 30 s).
+    stamp_60 = datetime.fromtimestamp(60).isoformat(timespec="seconds")
+    stamp_90 = datetime.fromtimestamp(90).isoformat(timespec="seconds")
+    assert [json.loads(line) for line in lines] == [
+        {"t": stamp_60, "msg": "agent status readable again after 2 failed polls"},
+        {"t": stamp_90, "msg": "session 1 ended: 2/2 done, 0 blocked"},
+    ]
+
+
+def test_unwritable_gate_does_not_stop_the_supervisor(tmp_path: Path, monkeypatch) -> None:
+    config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=1)
+    (run_dir / ".gate").write_text("not a directory", encoding="utf-8")  # .gate as a file blocks every write into it
+    clock = Clock()
+
+    monkeypatch.setattr(agent_module, "is_running", lambda cfg, quiet=False: False)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
+
+    logs: list[str] = []
+    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+
+    assert code == 1
+    # The supervisor kept running and logging even though .gate cannot hold the event log or the progress copy.
+    assert "agent did not start" in logs
+    assert logs[-1] == "stopped after 1 sessions without finishing; a human should look"
