@@ -6,8 +6,7 @@ from pathlib import Path
 
 from nightshift.config import RunConfig
 from nightshift.git import commit_log
-from nightshift.progress import Progress, read_progress
-from nightshift.supervise import read_supervisor_events
+from nightshift.supervise import read_run_progress, read_supervisor_events
 
 
 def _out(line: str) -> None:
@@ -15,18 +14,13 @@ def _out(line: str) -> None:
     print(line, flush=True)
 
 
+def _quiet(_line: str) -> None:
+    """Drop a log line: watch reads progress the supervisor's way but has nothing to report about it."""
+
+
 def _event_line(event: dict[str, str]) -> str:
     """Format one supervisor event as 'HH:MM:SS <msg>'."""
     return f"{event['t'].rsplit('T', 1)[-1]} {event['msg']}"
-
-
-def _read_run_progress(progress_path: Path, prefix: str, run_dir: Path) -> Progress:
-    """Read progress from the repo file; when cleanup removed it, read the .gate copy instead."""
-    if not progress_path.is_file():
-        fallback = run_dir / ".gate" / "progress.md"
-        if fallback.is_file():
-            return read_progress(fallback, prefix)
-    return read_progress(progress_path, prefix)
 
 
 def watch(
@@ -45,7 +39,7 @@ def watch(
     if once:
         for event in read_supervisor_events(run_dir):
             out(_event_line(event))
-        last = commit_log(repo)[-5:]
+        last = commit_log(repo)[:5]  # commit_log is newest first: these are the five newest
         for commit_hash, _, subject in reversed(last):
             out(f"commit {commit_hash} {subject}")
         return 0
@@ -63,7 +57,7 @@ def watch(
             event_count += len(events)
             for event in events:
                 out(_event_line(event))
-            if _read_run_progress(progress_path, config.prefix, run_dir).finished:
+            if read_run_progress(progress_path, config.prefix, run_dir, log=_quiet).finished:
                 out("watch: run finished")
                 return 0
             sleep(interval)

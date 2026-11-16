@@ -54,7 +54,7 @@ def _refresh_progress_copy(progress_file: Path, run_dir: Path) -> None:
         pass
 
 
-def _read_progress(progress_file: Path, prefix: str, run_dir: Path, log: Callable[[str], None] = _log) -> Progress:
+def read_run_progress(progress_file: Path, prefix: str, run_dir: Path, log: Callable[[str], None] = _log) -> Progress:
     """Read progress from the repo file; when cleanup removed it, read the .gate copy instead."""
     if progress_file.is_file():
         return read_progress(progress_file, prefix)
@@ -277,7 +277,7 @@ def supervise(
                         stop_status = _status()
                         if stop_status is False or (stop_status is None and _status_gave_up()):
                             break
-            progress = _read_progress(progress_path, config.prefix, run_dir, _log_with_events)
+            progress = read_run_progress(progress_path, config.prefix, run_dir, _log_with_events)
             _log_with_events(
                 f"session {session} ended: {len(progress.done)}/{total} done, {len(progress.blocked)} blocked"
             )

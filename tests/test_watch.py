@@ -139,14 +139,11 @@ def test_once_prints_all_events_and_last_five_commits(
 
     code = watch(config, run_dir, once=True)
 
-    log = commit_log(repo)  # newest first, seven commits in total
-    last_five = [f"commit {h} {s}" for h, _, s in reversed(log[-5:])]
+    lines = capsys.readouterr().out.splitlines()
     assert code == 0
-    assert capsys.readouterr().out.splitlines() == [
-        "10:00:00 first event",
-        "10:01:00 second event",
-        *last_five,
-    ]
+    assert lines[:2] == ["10:00:00 first event", "10:01:00 second event"]
+    # the five NEWEST of the seven commits, oldest first
+    assert [line.split(" ", 2)[2] for line in lines[2:]] == [f"commit {n}" for n in range(3, 8)]
 
 
 def test_every_is_clamped_to_at_least_one_second(tmp_path: Path) -> None:
