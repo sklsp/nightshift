@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.0
+
+- supervise: takes a per-repo lock in the git directory before it starts and refuses with exit code 2 while another process holds it, so only one supervisor can work on a repo at a time
+- config: run.branch now defaults to empty; when set, supervise and doctor refuse to start unless the repo is on that branch, and commits resolves its base against it instead of main
+- queue: new nightshift queue command supervises several run dirs back to back in order; it checks them all up front (a missing dir or one without run.toml stops with exit code 2), prints one finished line per run and returns the first non-zero code
+- release: version 0.9.0 and this changelog
+
 ## 0.8.0
 
 - supervise: appends one JSON object per poll event to .gate/supervise.jsonl, so a finished run leaves an audit trail of what the supervisor saw

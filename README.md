@@ -37,7 +37,11 @@ Python 3.11 or newer; no other dependencies. This puts `nightshift` on your PATH
     nightshift commits myrun         # check that each item has exactly one well-formed commit
    ```
 
+To run several runs back to back, use `nightshift queue <run dir> [<run dir> ...]`: it first checks that every run dir exists with a run.toml, then supervises them in order and stops at the first non-zero exit code.
+
 The supervisor survives a machine that refuses to start processes: an unreadable status is treated as unknown and a failed launch is retried with backoff; see `agent.launch_backoff_seconds` and `agent.max_launch_failures` in the config reference.
+
+The supervisor takes a lock file in the repo's git directory before it starts, so only one supervisor can work on a repo at a time; while another process holds the lock, `supervise` refuses with exit code 2.
 
 The supervisor appends one JSON object per poll event to `myrun/.gate/supervise.jsonl`, so a finished run leaves an audit trail of what it saw. When that log has entries, `status` adds a Supervisor: section with the last five events, one per line. And `report` shows how long each item took from its commit times plus a run time line from first to last item commit.
 
