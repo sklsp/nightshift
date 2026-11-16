@@ -249,6 +249,30 @@ def test_grace_period_logs_when_agent_never_starts(tmp_path: Path, monkeypatch) 
     assert clock.sleeps.count(120) == 1
 
 
+def test_fast_agent_that_finishes_before_any_poll_ends_the_run(tmp_path: Path, monkeypatch) -> None:
+    config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5)
+    clock = Clock()
+    calls = {"n": 0}
+
+    def fake_is_running(cfg: RunConfig, quiet: bool = False) -> bool:
+        # The agent never reports running: it finishes all the work before any poll sees it.
+        calls["n"] += 1
+        if calls["n"] == 3:
+            (config.repo / "PROGRESS-sup.md").write_text(_TICKED, encoding="utf-8")
+        return False
+
+    monkeypatch.setattr(agent_module, "is_running", fake_is_running)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
+
+    logs: list[str] = []
+    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+
+    assert code == 0
+    # The finished work is treated as a normal session end: no relaunch and no backoff.
+    assert "agent did not start" not in logs
+    assert logs[-1] == "session 1 ended: 2/2 done, 0 blocked"
+
+
 def test_failed_start_backs_off_then_the_next_session_finishes(tmp_path: Path, monkeypatch) -> None:
     config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5)
     clock = Clock()

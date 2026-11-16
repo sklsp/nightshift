@@ -241,15 +241,20 @@ def supervise(
                     if grace_status is None and _status_gave_up():
                         break
                 if not started:
-                    _log_with_events("agent did not start")
-                    launch_failures += 1
-                    if launch_failures >= config.max_launch_failures:
-                        _log_with_events(
-                            f"agent cannot be launched after {launch_failures} tries; a human should look"
-                        )
-                        return 2
-                    sleep(min(config.launch_backoff_seconds * (2 ** (launch_failures - 1)), 900))
-                    continue
+                    # A fast agent can finish before any poll sees it running; when every item is
+                    # already done, "not running" means the session ended, not that the launch failed.
+                    finished_early = read_run_progress(progress_path, config.prefix, run_dir, _log_with_events).finished
+                    if not finished_early:
+                        _log_with_events("agent did not start")
+                        launch_failures += 1
+                        if launch_failures >= config.max_launch_failures:
+                            _log_with_events(
+                                f"agent cannot be launched after {launch_failures} tries; a human should look"
+                            )
+                            return 2
+                        sleep(min(config.launch_backoff_seconds * (2 ** (launch_failures - 1)), 900))
+                        continue
+                    _log_with_events("agent finished before any poll saw it running")
                 launch_failures = 0
             last_fp = None
             fp_since = now()
