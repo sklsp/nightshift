@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.10.0
+
+- report: ends with a Supervisor section holding the last five events from .gate/supervise.jsonl when it has entries, next to the per-item commit times and run time line
+- status: shows how long the agent has been on its current item (on N2 for 2 h 38 min), counting up from the newest commit of a done item or, when there is none, from the first supervisor event; --json carries whole minutes under current_minutes
+- release: version 0.10.0 and this changelog
+
 ## 0.9.1
 
 - typing: mypy strict is on in pyproject.toml and CI runs mypy src after ruff; the injectable callables of supervise carry precise Callable types

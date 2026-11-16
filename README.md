@@ -43,7 +43,7 @@ The supervisor survives a machine that refuses to start processes: an unreadable
 
 The supervisor takes a lock file in the repo's git directory before it starts, so only one supervisor can work on a repo at a time; while another process holds the lock, `supervise` refuses with exit code 2.
 
-The supervisor appends one JSON object per poll event to `myrun/.gate/supervise.jsonl`, so a finished run leaves an audit trail of what it saw. When that log has entries, `status` adds a Supervisor: section with the last five events, one per line. And `report` shows how long each item took from its commit times plus a run time line from first to last item commit.
+The supervisor appends one JSON object per poll event to `myrun/.gate/supervise.jsonl`, so a finished run leaves an audit trail of what it saw. When that log has entries, `status` adds a Supervisor: section with the last five events, one per line. And `report` shows how long each item took from its commit times plus a run time line from first to last item commit. When that log has entries, `report` ends with a Supervisor section holding the same last five events. And `status` says how long the agent has been on its current item: it counts up from the newest commit of a done item or, when there is none, from the first supervisor event; `--json` carries whole minutes under current_minutes.
 
 ## The gate
 
