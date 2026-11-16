@@ -126,7 +126,13 @@ def test_format_exit_code_adds_hex_only_for_large_or_negative_codes() -> None:
 def test_exit_code_above_int32_prints_hex(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     config = _config(
         tmp_path,
-        status=[sys.executable, "-c", "import sys; sys.exit(3221225794)"],
+        # ExitProcess takes the full 32-bit code; sys.exit with a value this large gives -1 on some Python builds
+        status=[
+            sys.executable,
+            "-c",
+            "import ctypes; k = ctypes.windll.kernel32; k.ExitProcess.argtypes = [ctypes.c_uint]; "
+            "k.ExitProcess(3221225794)",
+        ],
     )
 
     assert is_running(config) is None
