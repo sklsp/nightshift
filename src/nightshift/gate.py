@@ -364,7 +364,7 @@ def _child_env() -> dict[str, str]:
 
 def _detach_kwargs() -> dict[str, Any]:
     """Popen flags that detach the child from this terminal."""
-    if os.name == "nt":
+    if sys.platform == "win32":  # mypy narrows sys.platform, not os.name, so Linux CI type-checks this
         flags = subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP
         return {"creationflags": flags}
     return {"start_new_session": True}
