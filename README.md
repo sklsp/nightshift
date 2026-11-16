@@ -59,6 +59,19 @@ nightshift gate clean myrun          # remove .gate state when nothing is runnin
 
 `wait` prints the pytest summary line and says GATE PASS or GATE FAIL. The log lives in `myrun/.gate/log`; a new start refuses to double start while the previous run is still going. A run whose log is older than two minutes without a result is treated as stale: start relaunches instead of refusing, and wait reports GATE STALE instead of polling forever.
 
+## Watching a run
+
+`nightshift watch myrun` prints new commits and supervisor events as they appear, so you can leave it open in a terminal while the agent works:
+
+```
+commit 3f9c2ab O1: add the gate wait command
+04:12:30 session 2 ended: 1/3 done, 0 blocked
+commit 8d1e77c O2: tick and commit item one
+watch: run finished
+```
+
+It prints nothing for commits and events that already exist when it starts, polls every `--every` seconds (default 20, at least 1), ends with the line `watch: run finished` when the progress file is fully ticked, and returns 0 on Ctrl+C. `nightshift watch myrun --once` does one poll that prints what exists now, all events plus the last five commits, and exits.
+
 ## Run folder layout
 
 ```

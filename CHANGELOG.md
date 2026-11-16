@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.11.0
+
+- watch: new nightshift watch command prints new commits and supervisor events as they appear, ends with a finished line when the progress file is fully ticked and returns 0 on Ctrl+C; --once does one poll that prints what exists now (all events plus the last five commits)
+- release: version 0.11.0 and this changelog
+
 ## 0.10.0
 
 - report: ends with a Supervisor section holding the last five events from .gate/supervise.jsonl when it has entries, next to the per-item commit times and run time line

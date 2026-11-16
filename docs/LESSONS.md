@@ -43,3 +43,6 @@ In Sparton run 13 the machine itself failed late in the night: Windows refused t
 
 ## One supervisor per repo
 On 2026-11-16 a stray supervisor from an earlier attempt was still alive on this repo when a new run started, and when the new run's agent session ended, the old supervisor relaunched its own run's prompt on the new run's branch, so the agent redid old items there. The lock therefore lives in the repo's git directory instead of the run folder: it guards the repo, not the run, so every run dir that points at the same repo shares one lock and only one supervisor can work on a given repo at a time.
+
+## Watching a run needs no shell loop
+A hand-written `while true; do ...; sleep 20` loop to watch an overnight run is exactly what `nightshift watch` replaces, so never write one by hand.
