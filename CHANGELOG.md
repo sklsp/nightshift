@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.1
+
+- typing: mypy strict is on in pyproject.toml and CI runs mypy src after ruff; the injectable callables of supervise carry precise Callable types
+- git: new nightshift.git module (run_git, current_branch, git_dir, fingerprint) replaces the duplicated git calls in supervise, cli, render and commits
+- release: version 0.9.1 and this changelog; no behaviour change
+
 ## 0.9.0
 
 - supervise: takes a per-repo lock in the git directory before it starts and refuses with exit code 2 while another process holds it, so only one supervisor can work on a repo at a time
