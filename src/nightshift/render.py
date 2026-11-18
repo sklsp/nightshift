@@ -71,6 +71,7 @@ def _start_text(config: RunConfig, total: int, run_dir: Path, templates_dir: Pat
             "command": command_prefix(config),
             "run_dir": run_dir.resolve().as_posix(),
             "timeout_hint": str(config.timeout_hint_seconds),
+            "protected": _protected_line(config),
         },
     )
 
@@ -113,6 +114,14 @@ def _check_command(config: RunConfig) -> str:
     parts = [" ".join(quote_arg(part) for part in command) for command in (config.lint, *config.pre) if command]
     parts.append(" ".join(quote_arg(part) for part in config.test))
     return " ; ".join(parts)
+
+
+def _protected_line(config: RunConfig) -> str:
+    """The RULES line naming protected paths, empty when protect is unset."""
+    if not config.protect:
+        return ""
+    paths = ", ".join(f"`{path}`" for path in config.protect)
+    return f"- **Never touch** these paths (the commits check flags any commit that does): {paths}."
 
 
 def _templates_dir(config: RunConfig, run_dir: Path) -> Path | None:

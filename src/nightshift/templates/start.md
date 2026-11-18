@@ -35,6 +35,7 @@ Check progress any time with `$command status $run_dir`. If a direct run takes l
 
 RULES
 - **Only these items.** Ideas go as one line in IDEAS.md in the run directory. Never re-scope an item.
+$protected
 - **Tests:** every behaviour an item names gets a test that fails if the behaviour breaks. Literal expected values.
   Never delete or weaken a test from an earlier item; if a later item changes behaviour on purpose, update the test
   and say why in the commit body.
