@@ -21,6 +21,7 @@ class RunConfig:
     prefix: str = "T"
     command: list[str] = field(default_factory=lambda: ["nightshift"])
     templates: str = ""
+    protect: list[str] = field(default_factory=list)
     lint: list[str] = field(default_factory=list)
     pre: list[list[str]] = field(default_factory=list)
     min_passed: int = 1
@@ -42,7 +43,7 @@ class RunConfig:
 
 _SECTIONS = ("run", "check", "agent")
 
-_RUN_KEYS = {"name", "repo", "branch", "prefix", "command", "templates"}
+_RUN_KEYS = {"name", "repo", "branch", "prefix", "command", "templates", "protect"}
 _CHECK_KEYS = {"lint", "pre", "test", "min_passed", "wait_seconds", "timeout_hint_seconds"}
 _AGENT_KEYS = {
     "launch",
@@ -97,6 +98,7 @@ def load_config(run_dir: Path) -> RunConfig:
         raise ConfigError("invalid value for 'run.command': at least one part is required")
 
     templates = _str(run, "run", "templates", "")
+    protect = _str_list(run, "run", "protect", [])
 
     lint = _str_list(check, "check", "lint", [])
     pre = _str_list_of_lists(check, "check", "pre", [])
@@ -132,6 +134,7 @@ def load_config(run_dir: Path) -> RunConfig:
         prefix=prefix,
         command=command,
         templates=templates,
+        protect=protect,
         lint=lint,
         pre=pre,
         min_passed=min_passed,

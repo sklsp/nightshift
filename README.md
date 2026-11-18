@@ -147,6 +147,7 @@ myrun/                  the run directory, outside the repo
 | `run.prefix` | `"T"` | item id prefix: T1, T2, ... |
 | `run.command` | `["nightshift"]` | program the rendered spec tells the agent to run; for example `["W:/nightshift/.venv/Scripts/python.exe", "-m", "nightshift"]` when it is not on PATH |
 | `run.templates` | `""` | directory of your own start.md and item.md templates, relative to this run dir or absolute; see "Your own templates" |
+| `run.protect` | `[]` | repo-relative posix path prefixes the agent must never touch (for example `.github/`); the commit check flags any commit that changes a matching file |
 | `check.test` | required | test command, run from the repo root |
 | `check.lint` | `[]` | optional lint command that must pass before tests start |
 | `check.pre` | `[]` | extra commands run after lint and before the tests, each a list of strings; first failure stops the start |

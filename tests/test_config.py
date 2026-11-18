@@ -32,6 +32,7 @@ repo = "repo"
 branch = "night"
 prefix = "AB"
 command = ["python", "-m", "nightshift"]
+protect = [".github/", "src/policy.py"]
 
 [check]
 lint = ["ruff", "check"]
@@ -60,6 +61,7 @@ stop = ["lms", "stop"]
     assert cfg.branch == "night"
     assert cfg.prefix == "AB"
     assert cfg.command == ["python", "-m", "nightshift"]
+    assert cfg.protect == [".github/", "src/policy.py"]
     assert cfg.lint == ["ruff", "check"]
     assert cfg.pre == [["mypy", "--strict"], ["ruff", "format", "--check"]]
     assert cfg.test == ["pytest", "-q"]
@@ -83,6 +85,7 @@ def test_defaults_when_optional_keys_missing(tmp_path: Path) -> None:
     assert cfg.branch == ""
     assert cfg.prefix == "T"
     assert cfg.command == ["nightshift"]
+    assert cfg.protect == []
     assert cfg.lint == []
     assert cfg.pre == []
     assert cfg.min_passed == 1
@@ -235,6 +238,18 @@ def test_command_with_non_string_part_is_rejected(tmp_path: Path) -> None:
 def test_command_empty_list_is_rejected(tmp_path: Path) -> None:
     _write(tmp_path, '[run]\nname = "demo"\nrepo = "."\ncommand = []\n\n[check]\ntest = ["x"]')
     with pytest.raises(ConfigError, match="invalid value for 'run.command'"):
+        load_config(tmp_path)
+
+
+def test_protect_not_a_list_is_rejected(tmp_path: Path) -> None:
+    _write(tmp_path, '[run]\nname = "demo"\nrepo = "."\nprotect = ".github/"\n\n[check]\ntest = ["x"]')
+    with pytest.raises(ConfigError, match="wrong type for 'run.protect': expected a list of str"):
+        load_config(tmp_path)
+
+
+def test_protect_with_non_string_is_rejected(tmp_path: Path) -> None:
+    _write(tmp_path, '[run]\nname = "demo"\nrepo = "."\nprotect = [".github/", 5]\n\n[check]\ntest = ["x"]')
+    with pytest.raises(ConfigError, match="wrong type for 'run.protect': expected a list of str"):
         load_config(tmp_path)
 
 

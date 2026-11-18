@@ -58,7 +58,9 @@ def _run_toml(repo: Path) -> str:
         f'launch = ["{exe}", "{agent}", "launch", "{repo_path}", "E", "PROGRESS-e2e.md"]\n'
         f'status = ["{exe}", "-c", "{status_code}"]\n'
         'running_pattern = "running"\n'
-        "poll_seconds = 1\n"
+        # poll_seconds 0 keeps the real supervisor and agent but removes the one second between polls,
+        # so the run stays fast; the rate limited sleep branch is covered by test_supervise with a fake clock
+        "poll_seconds = 0\n"
         "launch_grace_polls = 5\n"
         "launch_backoff_seconds = 1\n"
         "launch_ok_codes = [0]\n"

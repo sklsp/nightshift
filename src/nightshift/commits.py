@@ -49,6 +49,14 @@ def read_commits(repo: Path, base: str) -> list[Commit]:
     return commits
 
 
+def changed_files(repo: Path, commit_hash: str) -> list[str]:
+    """Return the repo-relative posix paths of the files one commit changed."""
+    result = run_git(repo, "diff-tree", "--no-commit-id", "--name-only", "-r", commit_hash)
+    if result.returncode != 0:
+        raise CommitError(f"git diff-tree failed: {result.stderr.strip()}")
+    return [line for line in result.stdout.splitlines() if line]
+
+
 def commit_report(config: RunConfig, items: list[Item], base: str | None = None) -> list[str]:
     """Return one line per problem with the commits since base; empty when clean."""
     if base is None:
@@ -60,6 +68,7 @@ def commit_report(config: RunConfig, items: list[Item], base: str | None = None)
     pattern = re.compile(rf"^{re.escape(config.prefix)}(\d+): ")
     bad_subjects: list[str] = []
     empty_bodies: list[str] = []
+    protected_lines: list[str] = []
     by_item: dict[int, list[Commit]] = {}
     for commit in commits:
         short = commit.hash[:7]
@@ -72,6 +81,10 @@ def commit_report(config: RunConfig, items: list[Item], base: str | None = None)
             by_item.setdefault(int(match.group(1)), []).append(commit)
         if not commit.body.strip():
             empty_bodies.append(f"{short} has an empty body")
+        if config.protect:
+            for path in changed_files(config.repo, commit.hash):
+                if any(path.startswith(prefix) for prefix in config.protect):
+                    protected_lines.append(f"{short} touches protected {path}")
 
     lines = list(bad_subjects)
     for number in sorted(by_item):
@@ -84,4 +97,5 @@ def commit_report(config: RunConfig, items: list[Item], base: str | None = None)
         if item.number not in committed_numbers:
             lines.append(f"{config.prefix}{item.number} has no commit")
     lines.extend(empty_bodies)
+    lines.extend(protected_lines)
     return lines

@@ -34,6 +34,7 @@ repo = ".."           # path to the repo root, relative to this run dir or absol
 # prefix = "T"        # item id prefix: T1, T2, ...
 # command = ["nightshift"]  # program the spec tells the agent to run; full path plus -m nightshift when not on PATH
 # templates = ""      # directory of your own start.md / item.md templates, relative to this run dir or absolute
+# protect = []        # path prefixes the agent must never touch, e.g. [".github/", "src/policy.py"]
 
 [check]
 test = ["pytest"]        # test command run from the repo root; no -q here, see "Never -q twice" in docs/LESSONS.md
