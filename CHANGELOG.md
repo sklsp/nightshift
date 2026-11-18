@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.14.0
+
+- init: new --from copies an old run's run.toml and items.md into a fresh run dir, rewriting only the [run] name and branch lines when their flags are given (comments and every other line stay byte for byte) and re-pointing a relative templates path at the same folder from the new dir; without --name or --branch the copy is unchanged, and items.md starts as a skeleton with one empty section
+- README: Quick start shows init --from in one line next to plain init and explains what it copies
+- release: version 0.14.0 and this changelog
+
 ## 0.13.0
 
 - tests: new test_end_to_end.py drives a real supervisor against the fake agent as a subprocess: it launches the agent, watches it commit three items in order and exits with code 0 when every item is ticked; README notes it under the architecture link
