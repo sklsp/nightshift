@@ -74,6 +74,9 @@ def _tick(progress_path: Path, prefix: str, number: int, title: str) -> None:
 def launch(repo: Path, prefix: str, progress_name: str) -> int:
     """Start a detached worker for this repo and report running at once."""
     script = Path(__file__).resolve()
+    # "running" first: a fast worker may write "done" before Popen returns, and a late "running" would
+    # overwrite it so the supervisor waits for ever
+    _status_path(repo).write_text("running", encoding="utf-8")
     subprocess.Popen(
         [sys.executable, str(script), "work", str(repo), prefix, progress_name],
         stdin=subprocess.DEVNULL,
@@ -81,7 +84,6 @@ def launch(repo: Path, prefix: str, progress_name: str) -> int:
         stderr=subprocess.DEVNULL,
         **_detach_kwargs(),
     )
-    _status_path(repo).write_text("running", encoding="utf-8")
     return 0
 
 
