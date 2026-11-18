@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.15.0
+
+- config: [run] protect lists path prefixes the agent must never touch; a non-list or a list with a non-string element is rejected at load time
+- commits: each commit that touches a file under one of those prefixes gets an extra line naming the short hash and the protected path, in commit order
+- render: when protect is set, the start spec gains a rule line listing the paths in backticks; ARCHITECTURE notes it
+- init: writes the protect key commented out with an example in the sample run.toml; README's config table lists it
+- release: version 0.15.0 and this changelog
+
 ## 0.14.0
 
 - init: new --from copies an old run's run.toml and items.md into a fresh run dir, rewriting only the [run] name and branch lines when their flags are given (comments and every other line stay byte for byte) and re-pointing a relative templates path at the same folder from the new dir; without --name or --branch the copy is unchanged, and items.md starts as a skeleton with one empty section
