@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=77"]  # 77+ reads license = "MIT" (PEP 639)
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,6 +7,7 @@ name = "nightshift"
 version = "0.15.0"
 description = "Run a local LLM coding agent unattended: one spec file per item, a test gate that fits a 30-second command limit, and a supervisor."
 requires-python = ">=3.11"
+license = "MIT"
 dependencies = []
 
 [project.optional-dependencies]

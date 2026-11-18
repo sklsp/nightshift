@@ -2,6 +2,24 @@
 
 nightshift runs a local LLM coding agent unattended: you write one item per spec file, and the agent works through them in order while nobody watches. It renders the run files from a small config plus an items list, gives the agent a test gate that fits inside a 30 second command limit, and supervises the agent by relaunching it when a session ends. In the morning you get one commit per item and a progress file with the last pytest line next to each tick.
 
+What a morning looks like, from real runs on another project (`nightshift watch`, then `nightshift report`):
+
+```
+$ nightshift watch myrun
+commit 4f336e3 Q1: dashboard: the slowest tools in the Speed panel
+commit 949d410 Q2: docs: the Speed panel shows tools
+watch: run finished
+
+$ nightshift report myrun
+# qwen64: 2/2 items
+- Q1 dashboard: the slowest tools in the Speed panel: 4f336e3
+- Q2 docs: the Speed panel shows tools: 949d410 (3 min)
+run time: 3 min (first to last item commit)
+
+## Supervisor
+- 1 session
+```
+
 docs/ARCHITECTURE.md explains how nightshift works inside: the life of a run, every module and the supervisor's rules.
 The suite includes an end to end test that drives a fake agent through a real run: supervise launches it as a subprocess and watches it commit every item until the progress file is fully ticked.
 
@@ -145,7 +163,7 @@ myrun/                  the run directory, outside the repo
 | `run.repo` | required | path to the repo root, relative to the run dir or absolute |
 | `run.branch` | `""` | when set, refuse to start unless the repo is on this branch (checked by supervise and doctor) |
 | `run.prefix` | `"T"` | item id prefix: T1, T2, ... |
-| `run.command` | `["nightshift"]` | program the rendered spec tells the agent to run; for example `["W:/nightshift/.venv/Scripts/python.exe", "-m", "nightshift"]` when it is not on PATH |
+| `run.command` | `["nightshift"]` | program the rendered spec tells the agent to run; for example `["/path/to/venv/bin/python", "-m", "nightshift"]` when it is not on PATH |
 | `run.templates` | `""` | directory of your own start.md and item.md templates, relative to this run dir or absolute; see "Your own templates" |
 | `run.protect` | `[]` | repo-relative posix path prefixes the agent must never touch (for example `.github/`); the commit check flags any commit that changes a matching file |
 | `check.test` | required | test command, run from the repo root |
@@ -172,3 +190,16 @@ Note for Cline users: the launch command may print "zen dispatch failed" while t
 ## Lessons
 
 docs/LESSONS.md collects the rules learned from real overnight runs. Read it before your first run.
+
+## How this was built
+
+nightshift was built the way it runs. A local model (Qwen 3.8 27B in LM Studio, driven through the Cline CLI) wrote
+most of the code, item by item, in unattended runs; Claude (Anthropic) wrote the specs, reviewed every commit,
+fixed what the review found and decided what came next; I set the direction and own the design. The history shows
+it: each run's commits are numbered by item (`J1:`, `K2:` and so on), and the review fixes follow as separate
+commits. From version 0.12 on, nightshift supervised its own runs on other projects, and most features after that
+came from what those runs got wrong (see docs/LESSONS.md).
+
+## License
+
+MIT, see LICENSE.
