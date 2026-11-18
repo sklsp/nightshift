@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import os
 import re
 import shutil
 import sys
@@ -67,6 +68,15 @@ Do the first thing, commit it and tick it in PROGRESS-example.md.
 Do the second thing, then send the final message described in 00-start.md.
 """
 
+_ITEMS_SKELETON = """\
+# Items
+
+## first item
+TODO: describe this item
+"""
+
+_RUN_KEY_LINE = re.compile(r"^(name|branch|templates)\s*=\s*(.+)$")
+
 
 def build_parser() -> argparse.ArgumentParser:
     """Build the top level argument parser."""
@@ -77,8 +87,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="version", version=f"nightshift {__version__}")
     subparsers = parser.add_subparsers(dest="command")
 
-    init_parser = subparsers.add_parser("init", help="create a run directory with example files")
+    init_parser = subparsers.add_parser(
+        "init", help="create a run directory, optionally copying config from an old run"
+    )
     init_parser.add_argument("run_dir", type=Path, help="path of the new run directory")
+    init_parser.add_argument("--from", dest="from_dir", type=Path, default=None, metavar="OLD_RUN_DIR")
+    init_parser.add_argument("--name", default=None, help="new name for the copied run (default: old name)")
+    init_parser.add_argument("--branch", default=None, help="set branch in the copied run.toml")
 
     build_parser = subparsers.add_parser("build", help="render the spec files into the run directory")
     build_parser.add_argument("run_dir", type=Path, help="path of an existing run directory")
@@ -151,7 +166,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     if args.command == "init":
-        return _init(args.run_dir)
+        return _init(args.run_dir, from_dir=args.from_dir, name=args.name, branch=args.branch)
     if args.command == "build":
         return _build(args.run_dir)
     if args.command == "supervise":
@@ -174,8 +189,10 @@ def main(argv: list[str] | None = None) -> int:
     return 2
 
 
-def _init(run_dir: Path) -> int:
-    """Create a new run directory with example run.toml and items.md."""
+def _init(
+    run_dir: Path, from_dir: Path | None = None, name: str | None = None, branch: str | None = None
+) -> int:
+    """Create a new run directory with example files, or copy the config of an old run."""
     for path in (run_dir / "run.toml", run_dir / "items.md"):
         if path.exists():
             print(f"error: {path} already exists", file=sys.stderr)
@@ -183,14 +200,101 @@ def _init(run_dir: Path) -> int:
     if run_dir.exists() and not run_dir.is_dir():
         print(f"error: {run_dir} is not a directory", file=sys.stderr)
         return 1
+    if from_dir is None:
+        if name is not None or branch is not None:
+            print("error: --name and --branch only work with --from", file=sys.stderr)
+            return 1
+        toml_text = _EXAMPLE_RUN_TOML
+        items_text = _EXAMPLE_ITEMS_MD
+    else:
+        old_toml = from_dir / "run.toml"
+        if not old_toml.is_file():
+            print(f"error: {from_dir} has no run.toml", file=sys.stderr)
+            return 1
+        toml_text = _rewrite_run_toml(
+            old_toml.read_text(encoding="utf-8"), from_dir, run_dir, name, branch
+        )
+        items_text = _ITEMS_SKELETON
     run_dir.mkdir(parents=True, exist_ok=True)
     toml_path = run_dir / "run.toml"
     items_path = run_dir / "items.md"
-    toml_path.write_text(_EXAMPLE_RUN_TOML, encoding="utf-8", newline="\n")
-    items_path.write_text(_EXAMPLE_ITEMS_MD, encoding="utf-8", newline="\n")
+    toml_path.write_text(toml_text, encoding="utf-8", newline="\n")
+    items_path.write_text(items_text, encoding="utf-8", newline="\n")
     print(toml_path)
     print(items_path)
     return 0
+
+
+def _rewrite_run_toml(
+    text: str, from_dir: Path, run_dir: Path, name: str | None, branch: str | None
+) -> str:
+    """Copy a run.toml for a fresh run; return the new text.
+
+    Only the [run] name and branch lines change, and only when their flag is given;
+    a relative templates path is re-pointed at the same folder from the new dir;
+    every other line stays byte for byte.
+    """
+    newline = "\r\n" if "\r\n" in text else "\n"
+    out: list[str] = []
+    in_run = False
+    run_header_index = -1
+    name_index = -1
+    branch_seen = False
+    for line in text.splitlines(keepends=True):
+        stripped = line.strip()
+        if re.match(r"^\[.+\]$", stripped):
+            in_run = stripped == "[run]"
+            if in_run:
+                run_header_index = len(out)
+            out.append(line)
+            continue
+        match = _RUN_KEY_LINE.match(stripped) if in_run else None
+        key = match.group(1) if match else None
+        if key == "name":
+            name_index = len(out)
+            out.append(_replace_value(line, "name", name) if name is not None else line)
+        elif key == "branch":
+            branch_seen = True
+            out.append(_replace_value(line, "branch", branch) if branch is not None else line)
+        elif key == "templates":
+            out.append(_rewrite_templates_line(line, from_dir, run_dir))
+        else:
+            out.append(line)
+    if branch is not None and not branch_seen:
+        at = (
+            name_index + 1
+            if name_index >= 0
+            else run_header_index + 1 if run_header_index >= 0 else len(out)
+        )
+        out.insert(at, f'branch = "{branch}"{newline}')
+    return "".join(out)
+
+
+def _replace_value(line: str, key: str, value: str) -> str:
+    """Replace the string value of one run.toml key line, keeping indent and any trailing comment."""
+    body = line.rstrip("\r\n")
+    match = re.match(rf'^(\s*{key}\s*=\s*)".*?"(.*)$', body)
+    if match is None:
+        return line
+    ending = line[len(body):]
+    return f'{match.group(1)}"{value}"{match.group(2)}{ending}'
+
+
+def _rewrite_templates_line(line: str, from_dir: Path, run_dir: Path) -> str:
+    """Re-point a relative templates path so it still resolves to the same folder from the new dir."""
+    body = line.rstrip("\r\n")
+    match = re.match(r'^(\s*templates\s*=\s*)"(.*?)"(.*)$', body)
+    if match is None:
+        return line
+    old_value = match.group(2)
+    if not old_value or Path(old_value).is_absolute():
+        return line
+    target = (from_dir / old_value).resolve()
+    new_value = os.path.relpath(target, run_dir.resolve()).replace("\\", "/")
+    if new_value == old_value:
+        return line
+    ending = line[len(body):]
+    return f'{match.group(1)}"{new_value}"{match.group(3)}{ending}'
 
 
 def _build(run_dir: Path) -> int:

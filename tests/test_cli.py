@@ -221,6 +221,130 @@ def test_init_refuses_existing_run(tmp_path: Path, capsys: pytest.CaptureFixture
     assert "already exists" in err
 
 
+def _make_old_run(base: Path) -> Path:
+    """Create a finished-looking run dir with comments, to copy from with init --from."""
+    old = base / "old-run"
+    old.mkdir()
+    (old / "run.toml").write_text(
+        "# copied from the last run\n"
+        "[run]\n"
+        'name = "old"   # short id for PROGRESS-<name>.md\n'
+        'repo = ".."\n'
+        'branch = "feature-old"  # keep me out of main\n'
+        'prefix = "N"\n'
+        "# templates = \"../shared/templates\"\n"
+        "[check]\n"
+        'test = ["pytest"]\n',
+        encoding="utf-8",
+    )
+    (old / "items.md").write_text(
+        "# Items\n\n## first item\nDo the old thing.\nMore detail line.\n\n## second item\nDo another old thing.\n",
+        encoding="utf-8",
+    )
+    return old
+
+
+def test_init_from_replaces_name_and_branch_keeps_comments(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    old = _make_old_run(tmp_path)
+    new_dir = tmp_path / "new-run"
+    assert main(["init", str(new_dir), "--from", str(old), "--name", "fresh", "--branch", "main"]) == 0
+    out = capsys.readouterr().out
+    assert "run.toml" in out and "items.md" in out
+    expected = (
+        "# copied from the last run\n"
+        "[run]\n"
+        'name = "fresh"   # short id for PROGRESS-<name>.md\n'
+        'repo = ".."\n'
+        'branch = "main"  # keep me out of main\n'
+        'prefix = "N"\n'
+        "# templates = \"../shared/templates\"\n"
+        "[check]\n"
+        'test = ["pytest"]\n'
+    )
+    assert (new_dir / "run.toml").read_text(encoding="utf-8") == expected
+
+
+def test_init_from_without_flags_keeps_run_toml_byte_for_byte(tmp_path: Path) -> None:
+    old = _make_old_run(tmp_path)
+    new_dir = tmp_path / "new-run"
+    assert main(["init", str(new_dir), "--from", str(old)]) == 0
+    assert (new_dir / "run.toml").read_text(encoding="utf-8") == (old / "run.toml").read_text(
+        encoding="utf-8"
+    )
+
+
+def test_init_from_adds_missing_branch_after_name(tmp_path: Path) -> None:
+    old = tmp_path / "old-run"
+    old.mkdir()
+    (old / "run.toml").write_text(
+        '[run]\nname = "old"\nrepo = ".."\n[check]\ntest = ["pytest"]\n', encoding="utf-8"
+    )
+    new_dir = tmp_path / "new-run"
+    assert main(["init", str(new_dir), "--from", str(old), "--branch", "main"]) == 0
+    lines = (new_dir / "run.toml").read_text(encoding="utf-8").splitlines()
+    name_at = next(i for i, line in enumerate(lines) if line.startswith("name"))
+    assert lines[name_at + 1] == 'branch = "main"'
+
+
+def test_init_from_rewrites_relative_templates_for_non_sibling(tmp_path: Path) -> None:
+    templates = tmp_path / "shared" / "templates"
+    templates.mkdir(parents=True)
+    old = tmp_path / "old-run"
+    old.mkdir()
+    (old / "run.toml").write_text(
+        '[run]\nname = "old"\nrepo = ".."\ntemplates = "../shared/templates"\n[check]\ntest = ["pytest"]\n',
+        encoding="utf-8",
+    )
+    new_dir = tmp_path / "elsewhere" / "new-run"
+    assert main(["init", str(new_dir), "--from", str(old)]) == 0
+    data = tomllib.loads((new_dir / "run.toml").read_text(encoding="utf-8"))
+    value = data["run"]["templates"]
+    assert not Path(value).is_absolute()
+    assert (new_dir / value).resolve() == templates.resolve()
+
+
+def test_init_from_writes_skeleton_items(tmp_path: Path) -> None:
+    old = _make_old_run(tmp_path)
+    new_dir = tmp_path / "new-run"
+    assert main(["init", str(new_dir), "--from", str(old)]) == 0
+    text = (new_dir / "items.md").read_text(encoding="utf-8")
+    assert text.count("\n## ") == 1
+    assert "Do the old thing." not in text and "second item" not in text
+
+
+def test_init_from_refuses_existing_run_toml(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    new_dir = tmp_path / "new-run"
+    new_dir.mkdir()
+    (new_dir / "run.toml").write_text("[run]\n", encoding="utf-8")
+    assert main(["init", str(new_dir), "--from", str(tmp_path)]) == 1
+    err = capsys.readouterr().err
+    assert "error:" in err and "run.toml" in err
+
+
+def test_init_from_refuses_existing_items_md(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    new_dir = tmp_path / "new-run"
+    new_dir.mkdir()
+    (new_dir / "items.md").write_text("# Items\n", encoding="utf-8")
+    assert main(["init", str(new_dir), "--from", str(tmp_path)]) == 1
+    err = capsys.readouterr().err
+    assert "error:" in err and "items.md" in err
+
+
+def test_init_from_missing_old_config_errors(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    old = tmp_path / "old"
+    old.mkdir()
+    (old / "items.md").write_text("# Items\n", encoding="utf-8")
+    assert main(["init", str(tmp_path / "new"), "--from", str(old)]) == 1
+    err = capsys.readouterr().err
+    assert "error:" in err and "no run.toml" in err
+
+
+def test_init_name_without_from_errors(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["init", str(tmp_path / "new"), "--name", "x"]) == 1
+    err = capsys.readouterr().err
+    assert "error:" in err and "only work with --from" in err
+
+
 def test_init_example_test_command_has_no_q(tmp_path: Path) -> None:
     run_dir = tmp_path / "run"
     assert main(["init", str(run_dir)]) == 0
