@@ -1,2 +1,0 @@
-- [x] B1. template: never kill processes by name (283 passed in 36.09s)
-- [x] B2. release 0.17.2 (283 passed in 35.29s)
