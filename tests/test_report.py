@@ -24,6 +24,13 @@ def _short_hash(repo: Path, ref: str) -> str:
     return result.stdout.strip()
 
 
+def _unix_time(repo: Path, ref: str) -> int:
+    """Return the committer unix time of one revision in repo."""
+    result = subprocess.run(["git", "log", "-1", "--format=%ct", ref], cwd=repo, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    return int(result.stdout.strip())
+
+
 def _dated_commit(repo: Path, filename: str, content: str, when: str, message: str) -> None:
     """Commit one file in repo with fixed author and committer dates."""
     (repo / filename).write_text(content, encoding="utf-8")
@@ -106,6 +113,44 @@ def test_report_lists_items_with_commits_and_blocked(tmp_path: Path, capsys: pyt
         f"- T2 second item: {_short_hash(repo, 'HEAD')} (38 min)\n"
         "- T3 third item: BLOCKED\n"
         "run time: 38 min (first to last item commit)\n"
+        "\n## Review\n- no warnings\n"
+    )
+
+
+def test_report_uses_recorded_item_commit_when_git_range_misses_it(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo, run_dir = _run_dir(
+        tmp_path,
+        _ITEMS_MD,
+        "# nightshift run rep progress\n\n- [x] T1. first item\n- [x] T2. second item\n- [x] T3. third item\n",
+    )
+    branch_result = subprocess.run(["git", "branch", "--show-current"], cwd=repo, capture_output=True, text=True)
+    assert branch_result.returncode == 0 and branch_result.stdout.strip()
+    main_branch = branch_result.stdout.strip()
+    _dated_commit(repo, "root.txt", "root\n", "2026-11-15T22:00:00", "root: initial import")
+    # T1 was committed on a side branch the run's range does not cover; only the supervisor event knows it
+    _git(repo, "checkout", "-q", "-b", "side")
+    _dated_commit(repo, "one.txt", "one\n", "2026-11-15T23:00:00", "T1: first item")
+    side_hash = _short_hash(repo, "HEAD")
+    _git(repo, "checkout", "-q", main_branch)
+    _dated_commit(repo, "two.txt", "two\n", "2026-11-15T23:38:00", "T2: second item")
+    _dated_commit(repo, "three.txt", "three\n", "2026-11-16T00:16:00", "T3: third item")
+    # only T1 has a recorded event; T2 and T3 fall back to the git range
+    _write_supervise_log(
+        run_dir, [_event("2026-11-15T23:00:05", f"item T1 committed {side_hash} at {_unix_time(repo, 'side')}")]
+    )
+
+    code = main(["report", str(run_dir)])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert out == (
+        "# rep: 3/3 items\n"
+        f"- T1 first item: {side_hash}\n"
+        f"- T2 second item: {_short_hash(repo, 'HEAD~1')} (38 min)\n"
+        f"- T3 third item: {_short_hash(repo, 'HEAD')} (38 min)\n"
+        "run time: 1 h 16 min (first to last item commit)\n"
         "\n## Review\n- no warnings\n"
     )
 

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from nightshift.config import RunConfig
-from nightshift.git import current_branch, run_git
+from nightshift.git import commit_log, current_branch, run_git
 from nightshift.items import Item
 
 
@@ -64,6 +64,24 @@ def resolve_base(config: RunConfig) -> str | None:
     if root.returncode != 0 or not root.stdout.strip():
         return None
     return root.stdout.splitlines()[0].strip()
+
+
+def run_commits(config: RunConfig) -> list[tuple[str, int, str]]:
+    """Return (hash, unix time, subject), newest first, of the commits in one run's range."""
+    base = resolve_base(config)
+    # the run's own branch when it exists: a later run's commits (other branches) never show up here
+    tip = config.branch if config.branch and run_git(
+        config.repo, "rev-parse", "--verify", "--quiet", f"{config.branch}^{{commit}}"
+    ).returncode == 0 else "HEAD"
+    return commit_log(config.repo, base=base, tip=tip)
+
+
+def find_commit(commits: list[tuple[str, int, str]], prefix: str) -> tuple[str, int] | None:
+    """Return (hash, unix time) of the newest commit whose subject starts with prefix."""
+    for commit_hash, unix_time, subject in commits:
+        if subject.startswith(prefix):
+            return (commit_hash, unix_time)
+    return None
 
 
 def read_commits(repo: Path, base: str) -> list[Commit]:

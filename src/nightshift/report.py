@@ -2,10 +2,9 @@
 
 from pathlib import Path
 
-from nightshift.commits import resolve_base
+from nightshift.commits import CommitError, find_commit, run_commits
 from nightshift.config import RunConfig, load_config
 from nightshift.gate import last_gate_line
-from nightshift.git import commit_log, run_git
 from nightshift.items import Item, load_items
 from nightshift.progress import Progress
 from nightshift.review import item_warnings
@@ -36,8 +35,9 @@ def build_report(run_dir: Path) -> str:
         lines: list[str] = [f"# {config.name}: {len(progress.done)}/{progress.total} items"]
     else:
         lines = [f"# {config.name}", "progress file missing"]
-    # only commits in the run's range, so a later run reusing the prefix never shows up here
-    commits = run_commits(config)
+    # only commits in the run's range, so a later run reusing the prefix never shows up here; the
+    # supervisor's per-item commit events overlay it, keeping items whose commit left the range
+    commits = recorded_commits(run_dir, config.prefix, run_commits(config))
 
     committed_times: list[int] = []
     for item in items:
@@ -45,7 +45,7 @@ def build_report(run_dir: Path) -> str:
         if item.number in progress.blocked:
             state_text = "BLOCKED"
         else:
-            found = _find_commit(commits, f"{marker}:")
+            found = find_commit(commits, f"{marker}:")
             if found is None:
                 state_text = "not committed"
             else:
@@ -69,14 +69,49 @@ def build_report(run_dir: Path) -> str:
     return "\n".join(lines) + "\n"
 
 
-def run_commits(config: RunConfig) -> list[tuple[str, int, str]]:
-    """Return (hash, unix time, subject), newest first, of the commits in one run's range."""
-    base = resolve_base(config)
-    # the run's own branch when it exists: a later run's commits (other branches) never show up here
-    tip = config.branch if config.branch and run_git(
-        config.repo, "rev-parse", "--verify", "--quiet", f"{config.branch}^{{commit}}"
-    ).returncode == 0 else "HEAD"
-    return commit_log(config.repo, base=base, tip=tip)
+def _item_commit_events(run_dir: Path, prefix: str) -> dict[int, tuple[str, int]]:
+    """Return {item number: (hash, unix time)} from the supervisor's per-item commit events."""
+    found: dict[int, tuple[str, int]] = {}
+    for event in read_supervisor_events(run_dir):
+        parts = event["msg"].split(" ")
+        if len(parts) != 6 or parts[0] != "item" or parts[2] != "committed" or parts[4] != "at":
+            continue
+        marker = parts[1][len(prefix):] if parts[1].startswith(prefix) else ""
+        if not marker.isdigit() or not parts[5].isdigit():
+            continue
+        found[int(marker)] = (parts[3], int(parts[5]))
+    return found
+
+
+def _item_marker_number(subject: str, prefix: str) -> int | None:
+    """Return the item number when a commit subject starts with '<prefix><n>: ', else None."""
+    if not subject.startswith(prefix):
+        return None
+    marker = subject[len(prefix):].split(": ", 1)[0]
+    return int(marker) if marker.isdigit() else None
+
+
+def recorded_commits(run_dir: Path, prefix: str, commits: list[tuple[str, int, str]]) -> list[tuple[str, int, str]]:
+    """Overlay the supervisor's per-item commit events onto one run's git range.
+
+    For every item with a recorded event, the recorded (hash, time) stands in for any range commit
+    of that item and is listed first, so find_commit prefers it; items without an event keep their
+    range commits unchanged.
+    """
+    recorded = _item_commit_events(run_dir, prefix)
+    if not recorded:
+        return commits
+    kept: list[tuple[str, int, str]] = []
+    for commit in commits:
+        number = _item_marker_number(commit[2], prefix)
+        if number is not None and number in recorded:
+            continue
+        kept.append(commit)
+    overlay = [
+        (commit_hash, unix_time, f"{prefix}{number}:")
+        for number, (commit_hash, unix_time) in sorted(recorded.items())
+    ]
+    return overlay + kept
 
 
 def run_seconds(
@@ -87,7 +122,7 @@ def run_seconds(
     for item in items:
         if item.number in progress.blocked:
             continue
-        found = _find_commit(commits, f"{config.prefix}{item.number}:")
+        found = find_commit(commits, f"{config.prefix}{item.number}:")
         if found is not None:
             times.append(found[1])
     if len(times) < 2:
@@ -121,13 +156,20 @@ def _append_section(lines: list[str], path: Path, title: str) -> None:
 
 
 def review_warnings(config: RunConfig, items: list[Item], commits: list[tuple[str, int, str]]) -> list[tuple[str, str]]:
-    """Return (item marker, warning text) pairs for every committed item; empty when clean."""
+    """Return (item marker, warning text) pairs for every committed item; empty when clean.
+
+    Items whose recorded commit git can no longer show are skipped rather than failing the report.
+    """
     pairs: list[tuple[str, str]] = []
     for item in items:
-        found = _find_commit(commits, f"{config.prefix}{item.number}:")
+        found = find_commit(commits, f"{config.prefix}{item.number}:")
         if found is None:
             continue
-        for warning in item_warnings(config, found[0]):
+        try:
+            warnings = item_warnings(config, found[0])
+        except CommitError:
+            continue
+        for warning in warnings:
             pairs.append((f"{config.prefix}{item.number}", warning))
     return pairs
 
@@ -172,11 +214,3 @@ def format_minutes(seconds: int) -> str:
         return f"{total} min"
     hours, rest = divmod(total, 60)
     return f"{hours} h {rest} min"
-
-
-def _find_commit(commits: list[tuple[str, int, str]], prefix: str) -> tuple[str, int] | None:
-    """Return (hash, unix time) of the newest commit whose subject starts with prefix."""
-    for commit_hash, unix_time, subject in commits:
-        if subject.startswith(prefix):
-            return (commit_hash, unix_time)
-    return None

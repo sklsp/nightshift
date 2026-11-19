@@ -3,9 +3,10 @@
 from dataclasses import dataclass
 from pathlib import Path
 
+from nightshift.commits import run_commits
 from nightshift.config import ConfigError, load_config
 from nightshift.items import ItemsError, load_items
-from nightshift.report import format_minutes, review_warnings, run_commits, run_seconds, session_count
+from nightshift.report import format_minutes, recorded_commits, review_warnings, run_seconds, session_count
 from nightshift.supervise import read_run_progress
 
 
@@ -32,7 +33,7 @@ def summarize_run(run_dir: Path) -> RunSummary:
     items = load_items(run_dir)
     progress_path = config.repo / f"PROGRESS-{config.name}.md"
     progress = read_run_progress(progress_path, config.prefix, run_dir, log=_quiet)
-    commits = run_commits(config)
+    commits = recorded_commits(run_dir, config.prefix, run_commits(config))
     return RunSummary(
         name=config.name,
         done=len(progress.done),
