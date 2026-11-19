@@ -50,6 +50,9 @@ $protected
   `git add <path>`. Never `git add -A` or `git add .`. Never `--amend`.
 - **Terminal:** code must work on Windows and Linux (pathlib, no shell=True unless an item says so, subprocess
   with lists). Chain commands the way your shell requires.
+- **Never kill processes by name** (no `Stop-Process -Name python`, `taskkill /IM python.exe`, `pkill python`): that also
+  kills the supervisor that keeps this run alive and the user's own programs. Stop only a process you started yourself,
+  by the pid you saved when you started it.
 - **Text:** no em dashes or en dashes anywhere, in code, docs or commit messages. Plain, short English.
 - **Never** run git checkout, switch, branch, merge, rebase, stash, reset, restore, clean or push.
 - **Failures:** if an item fails 3 times, write what you tried to BLOCKED.md in the run directory, undo your

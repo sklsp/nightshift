@@ -251,11 +251,23 @@ def test_start_file_has_append_only_notes_rule(tmp_path: Path) -> None:
     assert "never rewrite or shorten them" in text
 
 
+def test_start_file_has_never_kill_by_name_rule(tmp_path: Path) -> None:
+    out = tmp_path / "out"
+    render_run(_config(tmp_path), _items(), out)
+    text = (out / "00-start.md").read_text(encoding="utf-8")
+    assert "**Never kill processes by name**" in text
+    assert "`Stop-Process -Name python`" in text
+    assert "`taskkill /IM python.exe`" in text
+    assert "`pkill python`" in text
+    assert "by the pid you saved when you started it." in text
+
+
 def test_lessons_md_has_a_section_per_new_rule() -> None:
     lessons_path = Path(__file__).resolve().parent.parent / "docs" / "LESSONS.md"
     lessons = lessons_path.read_text(encoding="utf-8")
     assert "## Keep the why when you rewrite text" in lessons
     assert "## Notes files are append-only" in lessons
+    assert "## Never kill by name" in lessons
 
 
 def test_start_file_names_a_branch_when_none_is_configured(tmp_path: Path) -> None:

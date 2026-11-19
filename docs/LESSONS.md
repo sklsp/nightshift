@@ -46,3 +46,6 @@ On 2026-11-16 a stray supervisor from an earlier attempt was still alive on this
 
 ## Watching a run needs no shell loop
 A hand-written `while true; do ...; sleep 20` loop to watch an overnight run is exactly what `nightshift watch` replaces, so never write one by hand.
+
+## Never kill by name
+On 2026-11-19 an agent in an Iris run cleared its own stuck test runs with `Stop-Process -Name python -Force`, which also killed the nightshift supervisor and watch; it happened three times in that one run. The lock then refused a second supervisor while a leftover child process still held it. Never kill processes by name: stop only a process you started yourself, by the pid you saved when you started it.
