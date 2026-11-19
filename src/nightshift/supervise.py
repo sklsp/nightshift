@@ -41,9 +41,14 @@ def _log(message: str) -> None:
     print(message, flush=True)
 
 
+def gate_progress_path(run_dir: Path) -> Path:
+    """Return the .gate copy of one run's progress file, kept when cleanup removes the repo file."""
+    return run_dir / ".gate" / "progress.md"
+
+
 def _refresh_progress_copy(progress_file: Path, run_dir: Path) -> None:
     """Copy the repo progress file into .gate so a finished run stays finished if cleanup removes it."""
-    target = run_dir / ".gate" / "progress.md"
+    target = gate_progress_path(run_dir)
     if not progress_file.is_file():
         return
     try:
@@ -58,7 +63,7 @@ def read_run_progress(progress_file: Path, prefix: str, run_dir: Path, log: Call
     """Read progress from the repo file; when cleanup removed it, read the .gate copy instead."""
     if progress_file.is_file():
         return read_progress(progress_file, prefix)
-    fallback = run_dir / ".gate" / "progress.md"
+    fallback = gate_progress_path(run_dir)
     if fallback.is_file():
         log("repo progress file missing; reading the .gate copy")
         return read_progress(fallback, prefix)

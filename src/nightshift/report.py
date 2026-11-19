@@ -2,12 +2,12 @@
 
 from pathlib import Path
 
+from nightshift.commits import resolve_base
 from nightshift.config import load_config
 from nightshift.gate import last_gate_line
 from nightshift.git import commit_log
 from nightshift.items import load_items
-from nightshift.progress import read_progress
-from nightshift.supervise import read_supervisor_events
+from nightshift.supervise import gate_progress_path, read_run_progress, read_supervisor_events
 
 _SUPERVISOR_PREFIXES: tuple[tuple[str, str], ...] = (
     ("session ", "session"),
@@ -17,15 +17,27 @@ _SUPERVISOR_PREFIXES: tuple[tuple[str, str], ...] = (
 )
 
 
+def _quiet(message: str) -> None:
+    """No-op logger so report output stays clean markdown."""
+    return None
+
+
 def build_report(run_dir: Path) -> str:
     """Return the markdown summary of one run as a single string."""
     config = load_config(run_dir)
     items = load_items(run_dir)
     progress_path = config.repo / f"PROGRESS-{config.name}.md"
-    progress = read_progress(progress_path, config.prefix)
-    commits = commit_log(config.repo)
+    # cleanup removes the repo file; the .gate copy keeps counts alive, and when neither exists say so
+    has_progress = progress_path.is_file() or gate_progress_path(run_dir).is_file()
+    progress = read_run_progress(progress_path, config.prefix, run_dir, log=_quiet)
+    if has_progress:
+        lines: list[str] = [f"# {config.name}: {len(progress.done)}/{progress.total} items"]
+    else:
+        lines = [f"# {config.name}", "progress file missing"]
+    # only commits in the run's range, so a later run reusing the prefix never shows up here
+    base = resolve_base(config)
+    commits = commit_log(config.repo, base=base)
 
-    lines: list[str] = [f"# {config.name}: {len(progress.done)}/{progress.total} items"]
     committed_times: list[int] = []
     for item in items:
         marker = f"{config.prefix}{item.number}"

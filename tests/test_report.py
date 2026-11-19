@@ -95,6 +95,8 @@ def test_report_lists_items_with_commits_and_blocked(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     repo, run_dir = _run_dir(tmp_path, _ITEMS_MD, _PROGRESS_MD)
+    # a root commit before the run's range; the report must not list it as an item
+    _dated_commit(repo, "root.txt", "root\n", "2026-11-15T22:00:00", "root: initial import")
     _dated_commit(repo, "one.txt", "one\n", "2026-11-15T23:00:00", "T1: first item")
     _dated_commit(repo, "two.txt", "two\n", "2026-11-15T23:38:00", "T2: second item")
 
@@ -230,6 +232,7 @@ def test_report_shows_hours_for_longer_durations(
         _ITEMS_MD,
         "# rep\n\n- [x] T1. first item\n- [x] T2. second item\n- [x] T3. third item\n",
     )
+    _dated_commit(repo, "root.txt", "root\n", "2026-11-15T22:00:00", "root: initial import")
     _dated_commit(repo, "one.txt", "one\n", "2026-11-15T23:00:00", "T1: first item")
     _dated_commit(repo, "two.txt", "two\n", "2026-11-15T23:38:00", "T2: second item")
     _dated_commit(repo, "three.txt", "three\n", "2026-11-16T00:50:00", "T3: third item")
@@ -255,6 +258,7 @@ def test_report_single_commit_has_no_run_time(
         "# Items for the rep run\n\n## first item\nDo it.\n\n## second item\nDo that.\n",
         "- [x] T1. first item\n- [ ] T2. second item\n",
     )
+    _dated_commit(repo, "root.txt", "root\n", "2026-11-15T22:00:00", "root: initial import")
     _dated_commit(repo, "one.txt", "one\n", "2026-11-15T23:00:00", "T1: first item")
 
     code = main(["report", str(run_dir)])
@@ -276,6 +280,7 @@ def test_report_skips_blocked_items_for_durations(
         _ITEMS_MD,
         "# rep\n\n- [x] T1. first item\n- [ ] T2. second item BLOCKED\n- [x] T3. third item\n",
     )
+    _dated_commit(repo, "root.txt", "root\n", "2026-11-15T22:00:00", "root: initial import")
     _dated_commit(repo, "one.txt", "one\n", "2026-11-15T23:00:00", "T1: first item")
     _dated_commit(repo, "three.txt", "three\n", "2026-11-15T23:38:00", "T3: third item")
 
@@ -420,3 +425,89 @@ def test_report_supervise_log_with_only_other_events_gives_no_section(
     out = capsys.readouterr().out
     assert code == 0
     assert "Supervisor" not in out
+
+
+def test_report_reads_gate_copy_when_repo_progress_removed(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo, run_dir = _run_dir(tmp_path, _ITEMS_MD, _PROGRESS_MD)
+    (repo / "PROGRESS-rep.md").unlink()  # cleanup removed the repo file
+    gate_dir = run_dir / ".gate"
+    gate_dir.mkdir()
+    (gate_dir / "progress.md").write_text(_PROGRESS_MD, encoding="utf-8")
+
+    code = main(["report", str(run_dir)])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert out == (
+        "# rep: 2/3 items\n"
+        "- T1 first item: not committed\n"
+        "- T2 second item: not committed\n"
+        "- T3 third item: BLOCKED\n"
+    )
+
+
+def test_report_without_any_progress_says_missing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo, run_dir = _run_dir(tmp_path, "# Items for the rep run\n\n## first item\nDo it.\n", None)
+
+    code = main(["report", str(run_dir)])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert out == (
+        "# rep\n"
+        "progress file missing\n"
+        "- T1 first item: not committed\n"
+    )
+
+
+def test_report_shows_only_its_own_commits_when_prefix_is_reused(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    if shutil.which("git") is None:
+        pytest.skip("git not on PATH")
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.email", "night@test")
+    _git(repo, "config", "user.name", "Night")
+    _dated_commit(repo, "root.txt", "root\n", "2026-11-15T22:00:00", "root: initial import")
+
+    # run a worked on its own branch forked from main; later run b reused the same prefix on main
+    _git(repo, "checkout", "-q", "-b", "run-a")
+    _dated_commit(repo, "a.txt", "A\n", "2026-11-15T23:00:00", "T1: first item")
+    a_hash = _short_hash(repo, "HEAD")
+    _git(repo, "checkout", "-q", "main")
+    _dated_commit(repo, "b.txt", "B\n", "2026-11-15T23:30:00", "T1: first item")
+    b_hash = _short_hash(repo, "HEAD")
+
+    def _run_dir_for(name: str, branch: str) -> Path:
+        run_dir = tmp_path / f"run-{name}"
+        run_dir.mkdir()
+        branch_line = f'branch = "{branch}"\n' if branch else ""
+        (run_dir / "run.toml").write_text(
+            f'[run]\nname = "{name}"\nrepo = "{repo.as_posix()}"\n{branch_line}prefix = "T"\n[check]\ntest = []\n',
+            encoding="utf-8",
+        )
+        (run_dir / "items.md").write_text("# Items\n\n## first item\nDo it.\n", encoding="utf-8")
+        return run_dir
+
+    run_a = _run_dir_for("a", "main")  # forked from main, worked on run-a
+    run_b = _run_dir_for("b", "")      # ran directly on main
+    (repo / "PROGRESS-a.md").write_text("- [x] T1. first item\n", encoding="utf-8")
+    (repo / "PROGRESS-b.md").write_text("- [x] T1. first item\n", encoding="utf-8")
+
+    _git(repo, "checkout", "-q", "run-a")
+    assert main(["report", str(run_a)]) == 0
+    out = capsys.readouterr().out
+    # run b's same-prefix commit must not show up in run a's report
+    assert out == f"# a: 1/1 items\n- T1 first item: {a_hash}\n"
+
+    _git(repo, "checkout", "-q", "main")
+    assert main(["report", str(run_b)]) == 0
+    out = capsys.readouterr().out
+    # run a's same-prefix commit must not show up in run b's report
+    assert out == f"# b: 1/1 items\n- T1 first item: {b_hash}\n"
