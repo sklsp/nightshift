@@ -37,6 +37,13 @@ def review_lines(config: RunConfig, items: list[Item]) -> list[str]:
     return lines
 
 
+def item_warnings(config: RunConfig, commit_hash: str) -> list[str]:
+    """Return the plain warning texts of one item commit, in review order; empty when clean."""
+    paths = changed_files(config.repo, commit_hash)
+    per_file = _test_counts(config.repo, commit_hash, paths)
+    return _warnings_for(config, paths, per_file)
+
+
 def _tip(config: RunConfig) -> str:
     """The run's branch when it exists in the repo, else HEAD (the report's tip rule)."""
     if config.branch and run_git(
@@ -60,7 +67,7 @@ def _block(config: RunConfig, item: Item, commit_hash: str) -> list[str]:
     before = sum(count[0] for count in per_file.values())
     after = sum(count[1] for count in per_file.values())
     lines.append(f"  tests: {before} -> {after}")
-    lines.extend(_warnings(config, paths, per_file))
+    lines.extend(f"  ! {warning}" for warning in _warnings_for(config, paths, per_file))
     return lines
 
 
@@ -101,15 +108,15 @@ def _test_counts(repo: Path, commit_hash: str, paths: list[str]) -> dict[str, tu
     return counts
 
 
-def _warnings(config: RunConfig, paths: list[str], per_file: dict[str, tuple[int, int]]) -> list[str]:
-    """Return the '  ! ' warning lines under one block."""
+def _warnings_for(config: RunConfig, paths: list[str], per_file: dict[str, tuple[int, int]]) -> list[str]:
+    """Return the plain warning texts of one commit's changed files; empty when clean."""
     warnings: list[str] = []
     for path in paths:
         if any(path.startswith(prefix) for prefix in config.protect):
-            warnings.append(f"  ! touches protected {path}")
+            warnings.append(f"touches protected {path}")
     for path, (before, after) in per_file.items():
         if after < before:
-            warnings.append(f"  ! fewer tests in {path} ({before} -> {after})")
+            warnings.append(f"fewer tests in {path} ({before} -> {after})")
     if len(paths) > 15:
-        warnings.append(f"  ! more than 15 files ({len(paths)})")
+        warnings.append(f"more than 15 files ({len(paths)})")
     return warnings

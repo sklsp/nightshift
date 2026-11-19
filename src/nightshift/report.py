@@ -3,10 +3,11 @@
 from pathlib import Path
 
 from nightshift.commits import resolve_base
-from nightshift.config import load_config
+from nightshift.config import RunConfig, load_config
 from nightshift.gate import last_gate_line
 from nightshift.git import commit_log, run_git
-from nightshift.items import load_items
+from nightshift.items import Item, load_items
+from nightshift.review import item_warnings
 from nightshift.supervise import gate_progress_path, read_run_progress, read_supervisor_events
 
 _SUPERVISOR_PREFIXES: tuple[tuple[str, str], ...] = (
@@ -64,6 +65,7 @@ def build_report(run_dir: Path) -> str:
     gate_line = last_gate_line(run_dir)
     if gate_line != "last gate: none":
         lines.append(gate_line)
+    lines.extend(_review_section(config, items, commits))
     lines.extend(_supervisor_lines(run_dir))
     _append_section(lines, run_dir / "BUGS.md", "Bugs found")
     _append_section(lines, run_dir / "IDEAS.md", "Ideas")
@@ -93,6 +95,21 @@ def _append_section(lines: list[str], path: Path, title: str) -> None:
     lines.append("")
     lines.append(f"## {title}")
     lines.extend(note_lines)
+
+
+def _review_section(config: RunConfig, items: list[Item], commits: list[tuple[str, int, str]]) -> list[str]:
+    """Return the '## Review' section lines with every warning review would print, or '- no warnings'."""
+    body: list[str] = []
+    for item in items:
+        marker = f"{config.prefix}{item.number}"
+        found = _find_commit(commits, f"{marker}:")
+        if found is None:
+            continue
+        for warning in item_warnings(config, found[0]):
+            body.append(f"- {marker}: {warning}")
+    if not body:
+        body.append("- no warnings")
+    return ["", "## Review"] + body
 
 
 def _supervisor_lines(run_dir: Path) -> list[str]:
