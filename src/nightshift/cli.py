@@ -19,6 +19,7 @@ from nightshift.items import Item, ItemsError, load_items
 from nightshift.progress import Progress, read_progress
 from nightshift.render import RenderError, render_run
 from nightshift.report import build_report, format_minutes
+from nightshift.review import build_review
 from nightshift.status import current_item_seconds
 from nightshift.supervise import read_supervisor_events, supervise
 from nightshift.watch import watch
@@ -134,6 +135,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--base", default=None, help="ref to start the range at; default is the merge-base with run.branch"
     )
 
+    review_parser = subparsers.add_parser(
+        "review", help="print what each item commit changed, with warning lines under each block"
+    )
+    review_parser.add_argument("run_dir", type=Path, help="path of an existing run directory")
+
     gate_parser = subparsers.add_parser("gate", help="run a check behind the detached gate")
     gate_sub = gate_parser.add_subparsers(dest="gate_command", required=True)
     gate_start = gate_sub.add_parser("start", help="run lint and pre checks, then start the test command detached")
@@ -179,6 +185,8 @@ def main(argv: list[str] | None = None) -> int:
         return _report(args.run_dir, out=args.out)
     if args.command == "commits":
         return _commits(args.run_dir, base=args.base)
+    if args.command == "review":
+        return _review(args.run_dir)
     if args.command == "gate":
         return _gate(args)
     parser.print_help()
@@ -470,6 +478,17 @@ def _commits(run_dir: Path, base: str | None = None) -> int:
     for line in lines:
         print(line)
     return 0 if not lines else 1
+
+
+def _review(run_dir: Path) -> int:
+    """Print what each item commit changed; warnings never change the exit code."""
+    try:
+        text = build_review(run_dir)
+    except (ConfigError, ItemsError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    sys.stdout.write(text)
+    return 0
 
 
 def _gate(args: argparse.Namespace) -> int:

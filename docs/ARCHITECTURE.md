@@ -12,7 +12,7 @@ The agent then works item by item. `00-start.md` tells it to open only the file 
 
 The check runs behind the gate because agent terminals kill commands after about 30 seconds while a real suite takes minutes. `gate start` (`gate.py`, `start`) first runs lint and every pre check in order; when they pass it launches the test command detached through a second nightshift process (`_launch`, `_detach_kwargs`). Output goes to `.gate/log`, the exit code to `.gate/done`. `gate wait <n>` blocks at most `check.wait_seconds` (default 25), then either prints the next command with number n+1 or parses the pytest summary line from the log and says GATE PASS or FAIL (`wait`, `parse_summary`).
 
-While the agent works, `nightshift supervise <dir>` keeps it alive: `supervise()` in `src/nightshift/supervise.py` polls the status command every `agent.poll_seconds`, relaunches with a resume message when a session ends, and stops when every item is ticked or blocked. The read-only commands look at what happened afterwards: `watch` prints new commits and supervisor events until the final tick is committed (`src/nightshift/watch.py`), `status` prints a one-screen summary including minutes on the current item (`cli.py`, `_status`; `current_item_seconds` in `src/nightshift/status.py`), and `report` builds a markdown summary for a pull request body (`build_report` in `src/nightshift/report.py`).
+While the agent works, `nightshift supervise <dir>` keeps it alive: `supervise()` in `src/nightshift/supervise.py` polls the status command every `agent.poll_seconds`, relaunches with a resume message when a session ends, and stops when every item is ticked or blocked. The read-only commands look at what happened afterwards: `watch` prints new commits and supervisor events until the final tick is committed (`src/nightshift/watch.py`), `status` prints a one-screen summary including minutes on the current item (`cli.py`, `_status`; `current_item_seconds` in `src/nightshift/status.py`), and `report` builds a markdown summary for a pull request body (`build_report` in `src/nightshift/report.py`) and `review` prints what each item commit changed with warning lines under each block (`build_review` in `src/nightshift/review.py`).
 
 ```mermaid
 sequenceDiagram
@@ -40,7 +40,7 @@ sequenceDiagram
 
 | file | what it does |
 | --- | --- |
-| `src/nightshift/cli.py` | Command line interface: builds the argparse tree for init, build, supervise, queue, status, watch, doctor, report, commits and gate (`build_parser`, `main`) and dispatches to the other modules. |
+| `src/nightshift/cli.py` | Command line interface: builds the argparse tree for init, build, supervise, queue, status, watch, doctor, report, commits, review and gate (`build_parser`, `main`) and dispatches to the other modules. |
 | `src/nightshift/config.py` | Loads and validates run.toml into a frozen `RunConfig`; unknown keys, wrong types or missing required values raise `ConfigError`. |
 | `src/nightshift/items.py` | Splits items.md at its `## ` headings into numbered `Item`s; empty titles, duplicate titles or empty bodies raise `ItemsError`. |
 | `src/nightshift/render.py` | Renders 00-start.md, one item file per item and checklist.txt from templates (`render_run`); raises `RenderError` when a rendered file fails the text check. |
@@ -51,6 +51,7 @@ sequenceDiagram
 | `src/nightshift/watch.py` | Prints new commits and supervisor events as they appear until the run is finished and its final tick is committed (`watch`). |
 | `src/nightshift/status.py` | Computes how long the agent has been on its current item from commit times or the first supervisor event (`current_item_seconds`). |
 | `src/nightshift/report.py` | Builds a markdown summary of a run for a pull request body: per-item commits, run time, gate line and supervisor counts (`build_report`). |
+| `src/nightshift/review.py` | Prints what each item commit changed: files with added and removed lines, test counts before and after the commit, and warning lines under each block (`build_review`). |
 | `src/nightshift/commits.py` | Checks that the history has exactly one well-formed commit per item since base; reports bad subjects, empty bodies and missing or doubled items (`commit_report`). |
 | `src/nightshift/git.py` | Small helpers around git: `run_git`, `current_branch`, `git_dir`, `fingerprint` (HEAD plus status text) and `commit_log`. |
 | `src/nightshift/progress.py` | Reads PROGRESS-<name>.md into a `Progress` with done, blocked and next item; an unticked line ending in BLOCKED counts as resolved. |
