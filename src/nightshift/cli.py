@@ -31,6 +31,7 @@ _EXAMPLE_RUN_TOML = """\
 name = "example"      # short id for PROGRESS-<name>.md and commit ids (letters, digits, dashes)
 repo = ".."           # path to the repo root, relative to this run dir or absolute
 # branch = ""         # when set, refuse to start unless the repo is on this branch
+# base = ""           # range base for checks and report; default from branch, then main/master, else first commit
 # prefix = "T"        # item id prefix: T1, T2, ...
 # command = ["nightshift"]  # program the spec tells the agent to run; full path plus -m nightshift when not on PATH
 # templates = ""      # directory of your own start.md / item.md templates, relative to this run dir or absolute
@@ -104,40 +105,30 @@ def build_parser() -> argparse.ArgumentParser:
     )
     supervise_parser.add_argument("run_dir", type=Path, help="path of an existing run directory")
 
-    queue_parser = subparsers.add_parser(
-        "queue", help="supervise several run dirs back to back, in order"
-    )
+    queue_parser = subparsers.add_parser("queue", help="supervise several run dirs back to back, in order")
     queue_parser.add_argument("run_dirs", nargs="+", type=Path, help="run directories, supervised in order")
 
     status_parser = subparsers.add_parser("status", help="print a one-screen summary of the run")
     status_parser.add_argument("run_dir", type=Path, help="path of an existing run directory")
     status_parser.add_argument("--json", action="store_true", help="print the summary as one JSON object")
 
-    watch_parser = subparsers.add_parser(
-        "watch", help="print new commits and supervisor events as they appear"
-    )
+    watch_parser = subparsers.add_parser("watch", help="print new commits and supervisor events as they appear")
     watch_parser.add_argument("run_dir", type=Path, help="path of an existing run directory")
     watch_parser.add_argument(
         "--every", type=float, default=20.0, help="seconds between polls (default 20, at least 1)"
     )
     watch_parser.add_argument("--once", action="store_true", help="print what exists now and exit")
 
-    doctor_parser = subparsers.add_parser(
-        "doctor", help="check that the run dir is ready for an unattended run"
-    )
+    doctor_parser = subparsers.add_parser("doctor", help="check that the run dir is ready for an unattended run")
     doctor_parser.add_argument("run_dir", type=Path, help="path of an existing run directory")
 
-    report_parser = subparsers.add_parser(
-        "report", help="print a markdown summary of the run for a pull request body"
-    )
+    report_parser = subparsers.add_parser("report", help="print a markdown summary of the run for a pull request body")
     report_parser.add_argument("run_dir", type=Path, help="path of an existing run directory")
     report_parser.add_argument(
         "--out", type=Path, default=None, help="write the summary to this file instead of stdout"
     )
 
-    commits_parser = subparsers.add_parser(
-        "commits", help="check that each item has exactly one well-formed commit"
-    )
+    commits_parser = subparsers.add_parser("commits", help="check that each item has exactly one well-formed commit")
     commits_parser.add_argument("run_dir", type=Path, help="path of an existing run directory")
     commits_parser.add_argument(
         "--base", default=None, help="ref to start the range at; default is the merge-base with run.branch"
@@ -160,9 +151,7 @@ def build_parser() -> argparse.ArgumentParser:
     gate_file.add_argument("run_dir", type=Path, help="path of an existing run directory")
     gate_file.add_argument("test_file", help="path to the test file, relative to the repo root")
     gate_file.add_argument("module", help="module name used for the coverage report line")
-    gate_clean = gate_sub.add_parser(
-        "clean", help="delete <run dir>/.gate/ and print what it removed"
-    )
+    gate_clean = gate_sub.add_parser("clean", help="delete <run dir>/.gate/ and print what it removed")
     gate_clean.add_argument("run_dir", type=Path, help="path of an existing run directory")
 
     return parser
@@ -196,9 +185,7 @@ def main(argv: list[str] | None = None) -> int:
     return 2
 
 
-def _init(
-    run_dir: Path, from_dir: Path | None = None, name: str | None = None, branch: str | None = None
-) -> int:
+def _init(run_dir: Path, from_dir: Path | None = None, name: str | None = None, branch: str | None = None) -> int:
     """Create a new run directory with example files, or copy the config of an old run."""
     for path in (run_dir / "run.toml", run_dir / "items.md"):
         if path.exists():
@@ -218,9 +205,7 @@ def _init(
         if not old_toml.is_file():
             print(f"error: {from_dir} has no run.toml", file=sys.stderr)
             return 1
-        toml_text = _rewrite_run_toml(
-            old_toml.read_text(encoding="utf-8"), from_dir, run_dir, name, branch
-        )
+        toml_text = _rewrite_run_toml(old_toml.read_text(encoding="utf-8"), from_dir, run_dir, name, branch)
         items_text = _ITEMS_SKELETON
     run_dir.mkdir(parents=True, exist_ok=True)
     toml_path = run_dir / "run.toml"
@@ -232,9 +217,7 @@ def _init(
     return 0
 
 
-def _rewrite_run_toml(
-    text: str, from_dir: Path, run_dir: Path, name: str | None, branch: str | None
-) -> str:
+def _rewrite_run_toml(text: str, from_dir: Path, run_dir: Path, name: str | None, branch: str | None) -> str:
     """Copy a run.toml for a fresh run; return the new text.
 
     Only the [run] name and branch lines change, and only when their flag is given;
@@ -268,11 +251,7 @@ def _rewrite_run_toml(
         else:
             out.append(line)
     if branch is not None and not branch_seen:
-        at = (
-            name_index + 1
-            if name_index >= 0
-            else run_header_index + 1 if run_header_index >= 0 else len(out)
-        )
+        at = name_index + 1 if name_index >= 0 else run_header_index + 1 if run_header_index >= 0 else len(out)
         out.insert(at, f'branch = "{branch}"{newline}')
     return "".join(out)
 
@@ -283,7 +262,7 @@ def _replace_value(line: str, key: str, value: str) -> str:
     match = re.match(rf'^(\s*{key}\s*=\s*)".*?"(.*)$', body)
     if match is None:
         return line
-    ending = line[len(body):]
+    ending = line[len(body) :]
     return f'{match.group(1)}"{value}"{match.group(2)}{ending}'
 
 
@@ -300,7 +279,7 @@ def _rewrite_templates_line(line: str, from_dir: Path, run_dir: Path) -> str:
     new_value = os.path.relpath(target, run_dir.resolve()).replace("\\", "/")
     if new_value == old_value:
         return line
-    ending = line[len(body):]
+    ending = line[len(body) :]
     return f'{match.group(1)}"{new_value}"{match.group(3)}{ending}'
 
 
@@ -586,9 +565,7 @@ def _next_title(progress_path: Path, prefix: str, number: int) -> str | None:
     return None
 
 
-def _status_payload(
-    run_dir: Path, config: RunConfig, progress: Progress, progress_path: Path
-) -> dict[str, object]:
+def _status_payload(run_dir: Path, config: RunConfig, progress: Progress, progress_path: Path) -> dict[str, object]:
     """Build the JSON summary of one run; every key is always present."""
     next_item = progress.next_item
     if next_item is None:

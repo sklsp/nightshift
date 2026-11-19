@@ -29,9 +29,7 @@ def _make_run(tmp_path: Path, repo: Path) -> Path:
 
 def _git(repo: Path, *args: str, env: dict[str, str] | None = None) -> None:
     """Run one git command in repo and fail the test when it errors."""
-    result = subprocess.run(
-        ["git", *args], cwd=repo, capture_output=True, text=True, env={**os.environ, **(env or {})}
-    )
+    result = subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, env={**os.environ, **(env or {})})
     assert result.returncode == 0, f"git {' '.join(args)} failed: {result.stderr}"
 
 
@@ -86,9 +84,7 @@ def test_status_prints_time_on_current_item(
     repo = tmp_path / "repo"
     repo.mkdir()
     run_dir = _make_run(tmp_path, repo)
-    (repo / "PROGRESS-st.md").write_text(
-        "- [x] T1. first item\n- [ ] T2. second item\n", encoding="utf-8"
-    )
+    (repo / "PROGRESS-st.md").write_text("- [x] T1. first item\n- [ ] T2. second item\n", encoding="utf-8")
     monkeypatch.setattr(cli_module, "current_item_seconds", lambda run_dir, config, progress: 9480)
 
     assert main(["status", str(run_dir)]) == 0
@@ -103,9 +99,7 @@ def test_status_json_reports_current_minutes(
     repo = tmp_path / "repo"
     repo.mkdir()
     run_dir = _make_run(tmp_path, repo)
-    (repo / "PROGRESS-st.md").write_text(
-        "- [x] T1. first item\n- [ ] T2. second item\n", encoding="utf-8"
-    )
+    (repo / "PROGRESS-st.md").write_text("- [x] T1. first item\n- [ ] T2. second item\n", encoding="utf-8")
     monkeypatch.setattr(cli_module, "current_item_seconds", lambda run_dir, config, progress: 9480)
 
     assert main(["status", str(run_dir), "--json"]) == 0
@@ -114,9 +108,7 @@ def test_status_json_reports_current_minutes(
     assert payload["current_minutes"] == 158
 
 
-def test_finished_run_has_no_time_on_item(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_finished_run_has_no_time_on_item(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
     run_dir = _make_run(tmp_path, repo)

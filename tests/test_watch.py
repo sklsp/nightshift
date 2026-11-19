@@ -191,4 +191,3 @@ def test_cli_watch_missing_run_toml(tmp_path: Path, capsys: pytest.CaptureFixtur
 
     assert code == 1
     assert capsys.readouterr().err.strip() == f"error: missing run.toml in {missing}"
-

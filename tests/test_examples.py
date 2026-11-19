@@ -18,9 +18,7 @@ def test_hello_run_builds(tmp_path: Path) -> None:
         assert (run_dir / name).is_file()
     checklist = (run_dir / "checklist.txt").read_text(encoding="utf-8")
     expected = (
-        "- [ ] T1. Add a farewell function\n"
-        "- [ ] T2. Test the farewell function\n"
-        "- [ ] T3. Document the package\n"
+        "- [ ] T1. Add a farewell function\n- [ ] T2. Test the farewell function\n- [ ] T3. Document the package\n"
     )
     assert checklist == expected
     start = (run_dir / "00-start.md").read_text(encoding="utf-8")

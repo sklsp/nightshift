@@ -81,9 +81,7 @@ def test_lint_failure_does_not_start(tmp_path: Path, capsys: pytest.CaptureFixtu
     assert not (run_dir / ".gate" / "log").exists()
 
 
-def test_two_pre_checks_pass_then_suite_starts_and_passes(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_two_pre_checks_pass_then_suite_starts_and_passes(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     one = tmp_path / "one.txt"
     two = tmp_path / "two.txt"
     config = _config(tmp_path, pre=[_marker(one), _marker(two)])
@@ -101,9 +99,7 @@ def test_two_pre_checks_pass_then_suite_starts_and_passes(
     assert "GATE PASS" in out
 
 
-def test_second_pre_check_failure_stops_gate_with_its_name(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_second_pre_check_failure_stops_gate_with_its_name(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     one = tmp_path / "one.txt"
     two = tmp_path / "two.txt"
     failing = [
@@ -140,9 +136,7 @@ def test_start_hint_uses_custom_command(tmp_path: Path, capsys: pytest.CaptureFi
     assert f"python -m nightshift gate wait {run_dir} 1" in out
 
 
-def test_stale_wait_hint_uses_prefix_saved_at_start(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_stale_wait_hint_uses_prefix_saved_at_start(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     started_with = RunConfig(
         name="gate-test",
         repo=tmp_path / "repo",

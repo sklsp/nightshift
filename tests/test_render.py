@@ -43,9 +43,7 @@ def test_checklist_lines(tmp_path: Path) -> None:
 
 
 def test_custom_command_renders_prefix_in_start_file(tmp_path: Path) -> None:
-    config = RunConfig(
-        name="demo", repo=tmp_path / "repo", test=["pytest"], command=["python", "-m", "nightshift"]
-    )
+    config = RunConfig(name="demo", repo=tmp_path / "repo", test=["pytest"], command=["python", "-m", "nightshift"])
     out = tmp_path / "out"
     render_run(config, _items(), out)
     run_dir = out.resolve().as_posix()
@@ -57,9 +55,7 @@ def test_custom_command_renders_prefix_in_start_file(tmp_path: Path) -> None:
 
 
 def test_start_file_with_protect_contains_rule_line(tmp_path: Path) -> None:
-    config = RunConfig(
-        name="demo", repo=tmp_path / "repo", test=["pytest"], protect=[".github/", "src/policy.py"]
-    )
+    config = RunConfig(name="demo", repo=tmp_path / "repo", test=["pytest"], protect=[".github/", "src/policy.py"])
     out = tmp_path / "out"
     render_run(config, _items(), out)
     text = (out / "00-start.md").read_text(encoding="utf-8")
@@ -77,9 +73,7 @@ def test_start_file_without_protect_has_no_never_touch_line(tmp_path: Path) -> N
 
 
 def test_custom_command_renders_prefix_in_item_files(tmp_path: Path) -> None:
-    config = RunConfig(
-        name="demo", repo=tmp_path / "repo", test=["pytest"], command=["python", "-m", "nightshift"]
-    )
+    config = RunConfig(name="demo", repo=tmp_path / "repo", test=["pytest"], command=["python", "-m", "nightshift"])
     out = tmp_path / "out"
     written = render_run(config, _items(), out)
     run_dir = out.resolve().as_posix()

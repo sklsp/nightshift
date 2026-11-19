@@ -19,9 +19,7 @@ def _git(repo: Path, *args: str) -> None:
 
 def _short_hash(repo: Path, ref: str) -> str:
     """Return the short hash of one revision in repo."""
-    result = subprocess.run(
-        ["git", "rev-parse", "--short", ref], cwd=repo, capture_output=True, text=True
-    )
+    result = subprocess.run(["git", "rev-parse", "--short", ref], cwd=repo, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     return result.stdout.strip()
 
@@ -31,9 +29,7 @@ def _dated_commit(repo: Path, filename: str, content: str, when: str, message: s
     (repo / filename).write_text(content, encoding="utf-8")
     _git(repo, "add", filename)
     env = os.environ | {"GIT_AUTHOR_DATE": when, "GIT_COMMITTER_DATE": when}
-    result = subprocess.run(
-        ["git", "commit", "-q", "-m", message], cwd=repo, capture_output=True, text=True, env=env
-    )
+    result = subprocess.run(["git", "commit", "-q", "-m", message], cwd=repo, capture_output=True, text=True, env=env)
     assert result.returncode == 0, f"git commit failed: {result.stderr}"
 
 
@@ -71,11 +67,7 @@ Do the third thing.
 """
 
 _PROGRESS_MD = (
-    "# nightshift run rep progress\n"
-    "\n"
-    "- [x] T1. first item\n"
-    "- [x] T2. second item\n"
-    "- [ ] T3. third item BLOCKED\n"
+    "# nightshift run rep progress\n\n- [x] T1. first item\n- [x] T2. second item\n- [ ] T3. third item BLOCKED\n"
 )
 
 
@@ -91,9 +83,7 @@ def _write_supervise_log(run_dir: Path, lines: list[str]) -> None:
     (gate_dir / "supervise.jsonl").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def test_report_lists_items_with_commits_and_blocked(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_report_lists_items_with_commits_and_blocked(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     repo, run_dir = _run_dir(tmp_path, _ITEMS_MD, _PROGRESS_MD)
     # a root commit before the run's range; the report must not list it as an item
     _dated_commit(repo, "root.txt", "root\n", "2026-11-15T22:00:00", "root: initial import")
@@ -113,9 +103,7 @@ def test_report_lists_items_with_commits_and_blocked(
     )
 
 
-def test_report_without_commits_says_not_committed(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_report_without_commits_says_not_committed(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     repo, run_dir = _run_dir(
         tmp_path,
         "# Items for the rep run\n\n## first item\nDo it.\n\n## second item\nDo that.\n",
@@ -126,16 +114,10 @@ def test_report_without_commits_says_not_committed(
 
     out = capsys.readouterr().out
     assert code == 0
-    assert out == (
-        "# rep: 0/2 items\n"
-        "- T1 first item: not committed\n"
-        "- T2 second item: not committed\n"
-    )
+    assert out == ("# rep: 0/2 items\n- T1 first item: not committed\n- T2 second item: not committed\n")
 
 
-def test_report_out_writes_file_instead_of_stdout(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_report_out_writes_file_instead_of_stdout(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     repo, run_dir = _run_dir(
         tmp_path,
         "# Items for the rep run\n\n## first item\nDo it.\n",
@@ -148,15 +130,10 @@ def test_report_out_writes_file_instead_of_stdout(
     captured = capsys.readouterr()
     assert code == 0
     assert captured.out == ""
-    assert (
-        out_file.read_text(encoding="utf-8")
-        == "# rep: 1/1 items\n- T1 first item: not committed\n"
-    )
+    assert out_file.read_text(encoding="utf-8") == "# rep: 1/1 items\n- T1 first item: not committed\n"
 
 
-def test_report_includes_last_gate_line(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_report_includes_last_gate_line(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     repo, run_dir = _run_dir(
         tmp_path,
         "# Items for the rep run\n\n## first item\nDo it.\n",
@@ -171,16 +148,10 @@ def test_report_includes_last_gate_line(
 
     out = capsys.readouterr().out
     assert code == 0
-    assert out == (
-        "# rep: 1/1 items\n"
-        "- T1 first item: not committed\n"
-        "last gate: exit 0: 3 passed in 0.12s\n"
-    )
+    assert out == ("# rep: 1/1 items\n- T1 first item: not committed\nlast gate: exit 0: 3 passed in 0.12s\n")
 
 
-def test_report_appends_bugs_and_ideas_sections(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_report_appends_bugs_and_ideas_sections(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     repo, run_dir = _run_dir(
         tmp_path,
         "# Items for the rep run\n\n## first item\nDo it.\n",
@@ -206,9 +177,7 @@ def test_report_appends_bugs_and_ideas_sections(
     )
 
 
-def test_report_empty_notes_files_give_no_sections(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_report_empty_notes_files_give_no_sections(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     repo, run_dir = _run_dir(
         tmp_path,
         "# Items for the rep run\n\n## first item\nDo it.\n",
@@ -224,9 +193,7 @@ def test_report_empty_notes_files_give_no_sections(
     assert out == "# rep: 1/1 items\n- T1 first item: not committed\n"
 
 
-def test_report_shows_hours_for_longer_durations(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_report_shows_hours_for_longer_durations(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     repo, run_dir = _run_dir(
         tmp_path,
         _ITEMS_MD,
@@ -250,9 +217,7 @@ def test_report_shows_hours_for_longer_durations(
     )
 
 
-def test_report_single_commit_has_no_run_time(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_report_single_commit_has_no_run_time(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     repo, run_dir = _run_dir(
         tmp_path,
         "# Items for the rep run\n\n## first item\nDo it.\n\n## second item\nDo that.\n",
@@ -265,16 +230,10 @@ def test_report_single_commit_has_no_run_time(
 
     out = capsys.readouterr().out
     assert code == 0
-    assert out == (
-        "# rep: 1/2 items\n"
-        f"- T1 first item: {_short_hash(repo, 'HEAD')}\n"
-        "- T2 second item: not committed\n"
-    )
+    assert out == (f"# rep: 1/2 items\n- T1 first item: {_short_hash(repo, 'HEAD')}\n- T2 second item: not committed\n")
 
 
-def test_report_skips_blocked_items_for_durations(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_report_skips_blocked_items_for_durations(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     repo, run_dir = _run_dir(
         tmp_path,
         _ITEMS_MD,
@@ -297,9 +256,7 @@ def test_report_skips_blocked_items_for_durations(
     )
 
 
-def test_report_supervisor_section_from_mixed_log(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_report_supervisor_section_from_mixed_log(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     repo, run_dir = _run_dir(
         tmp_path,
         "# Items for the rep run\n\n## first item\nDo it.\n",
@@ -344,9 +301,7 @@ def test_report_supervisor_section_from_mixed_log(
     )
 
 
-def test_report_supervisor_plural_labels(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_report_supervisor_plural_labels(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     repo, run_dir = _run_dir(
         tmp_path,
         "# Items for the rep run\n\n## first item\nDo it.\n",
@@ -387,9 +342,7 @@ def test_report_supervisor_plural_labels(
     )
 
 
-def test_report_without_supervise_log_has_no_section(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_report_without_supervise_log_has_no_section(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     repo, run_dir = _run_dir(
         tmp_path,
         "# Items for the rep run\n\n## first item\nDo it.\n",
@@ -427,9 +380,7 @@ def test_report_supervise_log_with_only_other_events_gives_no_section(
     assert "Supervisor" not in out
 
 
-def test_report_reads_gate_copy_when_repo_progress_removed(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_report_reads_gate_copy_when_repo_progress_removed(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     repo, run_dir = _run_dir(tmp_path, _ITEMS_MD, _PROGRESS_MD)
     (repo / "PROGRESS-rep.md").unlink()  # cleanup removed the repo file
     gate_dir = run_dir / ".gate"
@@ -441,27 +392,18 @@ def test_report_reads_gate_copy_when_repo_progress_removed(
     out = capsys.readouterr().out
     assert code == 0
     assert out == (
-        "# rep: 2/3 items\n"
-        "- T1 first item: not committed\n"
-        "- T2 second item: not committed\n"
-        "- T3 third item: BLOCKED\n"
+        "# rep: 2/3 items\n- T1 first item: not committed\n- T2 second item: not committed\n- T3 third item: BLOCKED\n"
     )
 
 
-def test_report_without_any_progress_says_missing(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_report_without_any_progress_says_missing(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     repo, run_dir = _run_dir(tmp_path, "# Items for the rep run\n\n## first item\nDo it.\n", None)
 
     code = main(["report", str(run_dir)])
 
     out = capsys.readouterr().out
     assert code == 0
-    assert out == (
-        "# rep\n"
-        "progress file missing\n"
-        "- T1 first item: not committed\n"
-    )
+    assert out == ("# rep\nprogress file missing\n- T1 first item: not committed\n")
 
 
 def test_report_shows_only_its_own_commits_when_prefix_is_reused(
@@ -496,7 +438,7 @@ def test_report_shows_only_its_own_commits_when_prefix_is_reused(
         return run_dir
 
     run_a = _run_dir_for("a", "main")  # forked from main, worked on run-a
-    run_b = _run_dir_for("b", "")      # ran directly on main
+    run_b = _run_dir_for("b", "")  # ran directly on main
     (repo / "PROGRESS-a.md").write_text("- [x] T1. first item\n", encoding="utf-8")
     (repo / "PROGRESS-b.md").write_text("- [x] T1. first item\n", encoding="utf-8")
 

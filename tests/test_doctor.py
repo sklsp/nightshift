@@ -35,9 +35,7 @@ def _healthy_run(tmp_path: Path) -> Path:
         f"test = {repr(_test_words())}\nwait_seconds = 25\ntimeout_hint_seconds = 30\n",
         encoding="utf-8",
     )
-    (run_dir / "items.md").write_text(
-        "# Items for the doc run\n\n## one item\nDo the thing.\n", encoding="utf-8"
-    )
+    (run_dir / "items.md").write_text("# Items for the doc run\n\n## one item\nDo the thing.\n", encoding="utf-8")
     return run_dir
 
 
@@ -65,9 +63,7 @@ def test_doctor_healthy_run_is_all_ok(tmp_path: Path, capsys: pytest.CaptureFixt
     ]
 
 
-def test_doctor_full_config_names_every_check(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_doctor_full_config_names_every_check(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     run_dir = _healthy_run(tmp_path)
     exe = Path(sys.executable).as_posix()
     _rewrite_toml(run_dir, "wait_seconds = 25", f"lint = [{exe!r}]\nwait_seconds = 25")
@@ -93,9 +89,7 @@ def test_doctor_full_config_names_every_check(
     ]
 
 
-def test_doctor_broken_run_toml_reports_named_problem(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_doctor_broken_run_toml_reports_named_problem(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     run_dir = _healthy_run(tmp_path)
     _rewrite_toml(run_dir, 'name = "doc"\n', "")
 
@@ -106,9 +100,7 @@ def test_doctor_broken_run_toml_reports_named_problem(
     assert lines == ["problem: run.toml: missing required key 'run.name'"]
 
 
-def test_doctor_broken_items_md_reports_named_problem(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_doctor_broken_items_md_reports_named_problem(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     run_dir = _healthy_run(tmp_path)
     (run_dir / "items.md").write_text("# Items\nNo headers here.\n", encoding="utf-8")
 
@@ -125,9 +117,7 @@ def test_doctor_broken_items_md_reports_named_problem(
     ]
 
 
-def test_doctor_missing_lint_program_reports_problem(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_doctor_missing_lint_program_reports_problem(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     run_dir = _healthy_run(tmp_path)
     _rewrite_toml(run_dir, "wait_seconds = 25", 'lint = ["no-such-linter-xyz"]\nwait_seconds = 25')
 
@@ -138,9 +128,7 @@ def test_doctor_missing_lint_program_reports_problem(
     assert "problem: lint command: install no-such-linter-xyz or put it on PATH" in lines
 
 
-def test_doctor_pre_checks_are_named_and_checked(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_doctor_pre_checks_are_named_and_checked(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     run_dir = _healthy_run(tmp_path)
     exe = Path(sys.executable).as_posix()
     _rewrite_toml(run_dir, "wait_seconds = 25", f"pre = [[{exe!r}], ['no-such-pre-xyz']]\nwait_seconds = 25")
@@ -153,9 +141,7 @@ def test_doctor_pre_checks_are_named_and_checked(
     assert "problem: pre check 2: install no-such-pre-xyz or put it on PATH" in lines
 
 
-def test_doctor_missing_test_program_reports_problem(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_doctor_missing_test_program_reports_problem(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     run_dir = _healthy_run(tmp_path)
     _rewrite_toml(run_dir, repr(_test_words()), repr(["no-such-program-xyz"]))
 
@@ -166,15 +152,12 @@ def test_doctor_missing_test_program_reports_problem(
     assert "problem: test command: install no-such-program-xyz or put it on PATH" in lines
 
 
-def test_doctor_missing_agent_programs_report_problems(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_doctor_missing_agent_programs_report_problems(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     run_dir = _healthy_run(tmp_path)
     _rewrite_toml(
         run_dir,
         "timeout_hint_seconds = 30\n",
-        'timeout_hint_seconds = 30\n[agent]\n'
-        'launch = ["no-such-launch-xyz"]\nstatus = ["no-such-status-xyz"]\n',
+        'timeout_hint_seconds = 30\n[agent]\nlaunch = ["no-such-launch-xyz"]\nstatus = ["no-such-status-xyz"]\n',
     )
 
     code = main(["doctor", str(run_dir)])
@@ -235,9 +218,7 @@ def test_doctor_templates_bad_placeholder(tmp_path: Path, capsys: pytest.Capture
     assert "problem: templates: unknown placeholder $bogus in start.md" in lines
 
 
-def test_doctor_wait_seconds_not_below_timeout_hint(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_doctor_wait_seconds_not_below_timeout_hint(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     run_dir = _healthy_run(tmp_path)
     _rewrite_toml(run_dir, "wait_seconds = 25", "wait_seconds = 30")
 
@@ -246,4 +227,3 @@ def test_doctor_wait_seconds_not_below_timeout_hint(
     lines = capsys.readouterr().out.splitlines()
     assert code == 1
     assert "problem: timing: lower check.wait_seconds below check.timeout_hint_seconds" in lines
-

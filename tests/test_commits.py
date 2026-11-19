@@ -16,9 +16,7 @@ pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="git not on 
 
 def _git(repo: Path, *args: str) -> str:
     """Run one git command in repo and return its stripped stdout."""
-    result = subprocess.run(
-        ["git", "-C", str(repo), *args], capture_output=True, text=True, stdin=subprocess.DEVNULL
-    )
+    result = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, stdin=subprocess.DEVNULL)
     assert result.returncode == 0, result.stderr
     return result.stdout.strip()
 
@@ -43,7 +41,11 @@ def _file_commit(repo: Path, rel_path: str, content: str, subject: str) -> str:
 
 
 def _make_run(
-    tmp_path: Path, template: Path, config_branch: str = "main", protect: list[str] | None = None
+    tmp_path: Path,
+    template: Path,
+    config_branch: str = "main",
+    protect: list[str] | None = None,
+    base: str | None = None,
 ) -> tuple[Path, Path]:
     """Create a git repo on branch main with one root commit plus a run dir."""
     repo = tmp_path / "repo"
@@ -55,14 +57,14 @@ def _make_run(
     if protect is not None:
         values = ", ".join(f'"{value}"' for value in protect)
         protect_line = f"protect = [{values}]\n"
+    base_line = f'base = "{base}"\n' if base is not None else ""
     toml_text = (
-        f'[run]\nname = "c"\nrepo = "../repo"\nbranch = "{config_branch}"\nprefix = "T"\n{protect_line}\n'
-        '[check]\ntest = ["pytest"]\n'
+        f'[run]\nname = "c"\nrepo = "../repo"\nbranch = "{config_branch}"\n{base_line}'
+        f'prefix = "T"\n{protect_line}\n[check]\ntest = ["pytest"]\n'
     )
     (run_dir / "run.toml").write_text(toml_text, encoding="utf-8")
     (run_dir / "items.md").write_text(
-        "# Items\n\n## one\nDo the first thing.\n\n## two\nDo the second thing.\n\n"
-        "## three\nDo the third thing.\n",
+        "# Items\n\n## one\nDo the first thing.\n\n## two\nDo the second thing.\n\n## three\nDo the third thing.\n",
         encoding="utf-8",
     )
     return repo, run_dir
@@ -145,6 +147,43 @@ def test_default_base_falls_back_to_first_commit(tmp_path: Path, git_template: P
     config, items = _config_and_items(run_dir)
     assert resolve_base(config) == root
     # the range starts after the root commit, so all item commits are checked and clean
+    assert commit_report(config, items) == []
+
+
+def test_run_branch_equal_to_current_uses_main_as_base(tmp_path: Path, git_template: Path) -> None:
+    repo, run_dir = _make_run(tmp_path, git_template, config_branch="run-x")
+    main_sha = _git(repo, "rev-parse", "main")
+    _git(repo, "checkout", "-q", "-b", "run-x")
+    for number in (1, 2, 3):
+        _commit(repo, f"T{number}: item {number}")
+    config, items = _config_and_items(run_dir)
+    # branch == current branch, so merge-base(branch, HEAD) would be HEAD; main is used as base instead
+    assert resolve_base(config) == main_sha
+    assert commit_report(config, items) == []
+
+
+def test_explicit_base_wins_over_branch(tmp_path: Path, git_template: Path) -> None:
+    repo, run_dir = _make_run(tmp_path, git_template, config_branch="side", base="main")
+    root = _git(repo, "rev-list", "--max-parents=0", "HEAD")
+    _git(repo, "checkout", "-q", "-b", "side")  # side stays at the root commit
+    _git(repo, "checkout", "-q", "main")
+    main_sha = _commit(repo, "M1: prep work on main")
+    _git(repo, "checkout", "-q", "-b", "work")  # current branch differs from config.branch
+    assert root != main_sha
+    config, items = _config_and_items(run_dir)
+    # without base the merge-base of side and HEAD would be the root commit; base = "main" wins
+    assert resolve_base(config) == main_sha
+
+
+def test_run_branch_without_main_falls_back_to_first_commit(tmp_path: Path, git_template: Path) -> None:
+    repo, run_dir = _make_run(tmp_path, git_template, config_branch="work")
+    root = _git(repo, "rev-list", "--max-parents=0", "HEAD")
+    _git(repo, "branch", "-m", "trunk")  # no main or master exists in this repo
+    _git(repo, "checkout", "-q", "-b", "work")
+    for number in (1, 2, 3):
+        _commit(repo, f"T{number}: item {number}")
+    config, items = _config_and_items(run_dir)
+    assert resolve_base(config) == root
     assert commit_report(config, items) == []
 
 

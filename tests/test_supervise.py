@@ -368,9 +368,7 @@ def test_launch_code_outside_ok_codes_is_logged(tmp_path: Path, monkeypatch) -> 
 
 
 def test_launch_backoff_is_capped_at_fifteen_minutes(tmp_path: Path, monkeypatch) -> None:
-    config, run_dir = _setup(
-        tmp_path, _UNTICKED, max_sessions=10, launch_backoff_seconds=600, max_launch_failures=3
-    )
+    config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=10, launch_backoff_seconds=600, max_launch_failures=3)
     clock = Clock()
 
     monkeypatch.setattr(agent_module, "is_running", lambda cfg, quiet=False: False)
@@ -398,6 +396,7 @@ def test_changing_fingerprint_never_triggers(tmp_path: Path, monkeypatch) -> Non
 
     monkeypatch.setattr(agent_module, "is_running", fake_is_running)
     monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
+
     # A fingerprint that changes on every poll, even though the session runs
     # far longer than idle_minutes.
     def fingerprint(repo: Path) -> str:
@@ -411,9 +410,7 @@ def test_changing_fingerprint_never_triggers(tmp_path: Path, monkeypatch) -> Non
 
 
 def test_unchanged_fingerprint_triggers_and_runs_stop_once(tmp_path: Path, monkeypatch) -> None:
-    config, run_dir = _setup(
-        tmp_path, _UNTICKED, max_sessions=5, idle_minutes=1, stop=["fake-stop"]
-    )
+    config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5, idle_minutes=1, stop=["fake-stop"])
     clock = Clock()
     calls = {"n": 0}
     stops: list[RunConfig] = []
@@ -788,12 +785,17 @@ def test_stale_lock_is_removed_and_taken_over(tmp_path: Path, monkeypatch) -> No
     assert f"removing a stale supervisor lock (pid {dead_pid})" in logs
     assert seen["pid"] == os.getpid()
 
+
 def test_refuses_to_start_on_the_wrong_branch(tmp_path: Path, monkeypatch) -> None:
     config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5, branch="main")
     _git_init(config.repo)
     subprocess.run(
         ["git", "checkout", "-q", "-b", "feature"],
-        cwd=config.repo, check=True, capture_output=True, text=True, stdin=subprocess.DEVNULL,
+        cwd=config.repo,
+        check=True,
+        capture_output=True,
+        text=True,
+        stdin=subprocess.DEVNULL,
     )
     clock = Clock()
     launches: list[str] = []
@@ -816,7 +818,11 @@ def test_starts_when_on_the_right_branch(tmp_path: Path, monkeypatch) -> None:
     _git_init(config.repo)
     subprocess.run(
         ["git", "checkout", "-q", "-b", "night"],
-        cwd=config.repo, check=True, capture_output=True, text=True, stdin=subprocess.DEVNULL,
+        cwd=config.repo,
+        check=True,
+        capture_output=True,
+        text=True,
+        stdin=subprocess.DEVNULL,
     )
     clock = Clock()
     calls = {"n": 0}
@@ -835,4 +841,3 @@ def test_starts_when_on_the_right_branch(tmp_path: Path, monkeypatch) -> None:
 
     assert code == 0
     assert logs == ["session 1 ended: 2/2 done, 0 blocked"]
-

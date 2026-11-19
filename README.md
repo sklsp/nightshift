@@ -162,6 +162,7 @@ myrun/                  the run directory, outside the repo
 | `run.name` | required | short id for PROGRESS-<name>.md and item ids (letters, digits, dashes) |
 | `run.repo` | required | path to the repo root, relative to the run dir or absolute |
 | `run.branch` | `""` | when set, refuse to start unless the repo is on this branch (checked by supervise and doctor) |
+| `run.base` | `""` | range base for the commit check and report, as a branch or commit; when unset, merge-base of run.branch and HEAD if it differs from the current branch, else main/master (or their origin copies) when present, else the first commit |
 | `run.prefix` | `"T"` | item id prefix: T1, T2, ... |
 | `run.command` | `["nightshift"]` | program the rendered spec tells the agent to run; for example `["/path/to/venv/bin/python", "-m", "nightshift"]` when it is not on PATH |
 | `run.templates` | `""` | directory of your own start.md and item.md templates, relative to this run dir or absolute; see "Your own templates" |

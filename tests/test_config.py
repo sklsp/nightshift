@@ -301,7 +301,8 @@ def test_launch_ok_codes_not_a_list_is_rejected(tmp_path: Path) -> None:
 def test_launch_ok_codes_with_non_integer_is_rejected(tmp_path: Path) -> None:
     _write(
         tmp_path,
-        MINIMAL + """
+        MINIMAL
+        + """
 [agent]
 launch_ok_codes = [0, "1"]
 """,

@@ -111,8 +111,16 @@ def test_status_json_with_progress(tmp_path: Path, capsys: pytest.CaptureFixture
     assert main(["status", str(run_dir), "--json"]) == 0
     payload = json.loads(capsys.readouterr().out)
     assert set(payload) == {
-        "name", "total", "done", "blocked", "next_item", "next_title", "current_minutes",
-        "gate", "commits", "events"
+        "name",
+        "total",
+        "done",
+        "blocked",
+        "next_item",
+        "next_title",
+        "current_minutes",
+        "gate",
+        "commits",
+        "events",
     }
     assert payload["name"] == "st"
     assert payload["total"] == 3
@@ -137,8 +145,16 @@ def test_status_json_fresh_run(tmp_path: Path, capsys: pytest.CaptureFixture[str
     assert main(["status", str(run_dir), "--json"]) == 0
     payload = json.loads(capsys.readouterr().out)
     assert set(payload) == {
-        "name", "total", "done", "blocked", "next_item", "next_title", "current_minutes",
-        "gate", "commits", "events"
+        "name",
+        "total",
+        "done",
+        "blocked",
+        "next_item",
+        "next_title",
+        "current_minutes",
+        "gate",
+        "commits",
+        "events",
     }
     assert payload["name"] == "st"
     assert payload["total"] == 0
@@ -174,9 +190,7 @@ def test_gate_start_and_wait_via_cli(tmp_path: Path, capsys: pytest.CaptureFixtu
     assert "no pytest summary line" in out
 
 
-def test_gate_start_passes_extra_args_after_double_dash(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_gate_start_passes_extra_args_after_double_dash(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
     fast = [sys.executable, "-c", "pass"]
@@ -260,7 +274,7 @@ def _make_old_run(base: Path) -> Path:
         'repo = ".."\n'
         'branch = "feature-old"  # keep me out of main\n'
         'prefix = "N"\n'
-        "# templates = \"../shared/templates\"\n"
+        '# templates = "../shared/templates"\n'
         "[check]\n"
         'test = ["pytest"]\n',
         encoding="utf-8",
@@ -285,7 +299,7 @@ def test_init_from_replaces_name_and_branch_keeps_comments(tmp_path: Path, capsy
         'repo = ".."\n'
         'branch = "main"  # keep me out of main\n'
         'prefix = "N"\n'
-        "# templates = \"../shared/templates\"\n"
+        '# templates = "../shared/templates"\n'
         "[check]\n"
         'test = ["pytest"]\n'
     )
@@ -296,17 +310,13 @@ def test_init_from_without_flags_keeps_run_toml_byte_for_byte(tmp_path: Path) ->
     old = _make_old_run(tmp_path)
     new_dir = tmp_path / "new-run"
     assert main(["init", str(new_dir), "--from", str(old)]) == 0
-    assert (new_dir / "run.toml").read_text(encoding="utf-8") == (old / "run.toml").read_text(
-        encoding="utf-8"
-    )
+    assert (new_dir / "run.toml").read_text(encoding="utf-8") == (old / "run.toml").read_text(encoding="utf-8")
 
 
 def test_init_from_adds_missing_branch_after_name(tmp_path: Path) -> None:
     old = tmp_path / "old-run"
     old.mkdir()
-    (old / "run.toml").write_text(
-        '[run]\nname = "old"\nrepo = ".."\n[check]\ntest = ["pytest"]\n', encoding="utf-8"
-    )
+    (old / "run.toml").write_text('[run]\nname = "old"\nrepo = ".."\n[check]\ntest = ["pytest"]\n', encoding="utf-8")
     new_dir = tmp_path / "new-run"
     assert main(["init", str(new_dir), "--from", str(old), "--branch", "main"]) == 0
     lines = (new_dir / "run.toml").read_text(encoding="utf-8").splitlines()
@@ -457,9 +467,7 @@ def test_status_prints_last_five_supervisor_events(tmp_path: Path, capsys: pytes
     ]
 
 
-def test_status_json_includes_last_five_supervisor_events(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_status_json_includes_last_five_supervisor_events(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
     run_dir = _make_run(tmp_path, repo)
@@ -518,11 +526,9 @@ def _make_doctor_run(tmp_path: Path, repo: Path, branch: str | None) -> Path:
     toml = f'[run]\nname = "st"\nrepo = "{repo.as_posix()}"\nprefix = "N"\n'
     if branch is not None:
         toml += f'branch = "{branch}"\n'
-    toml += f'[check]\ntest = [{sys.executable!r}]\n'
+    toml += f"[check]\ntest = [{sys.executable!r}]\n"
     (run_dir / "run.toml").write_text(toml, encoding="utf-8")
-    (run_dir / "items.md").write_text(
-        "# Items\n\n## first item\nDo the thing and tick it.\n", encoding="utf-8"
-    )
+    (run_dir / "items.md").write_text("# Items\n\n## first item\nDo the thing and tick it.\n", encoding="utf-8")
     return run_dir
 
 
@@ -636,4 +642,3 @@ def test_queue_missing_run_dir_stops_before_anything(
     err = capsys.readouterr().err
     assert not ran
     assert f"error: {missing} does not exist or has no run.toml" in err
-

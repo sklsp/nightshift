@@ -273,11 +273,7 @@ def supervise(
                     last_fp = fp
                     fp_since = now()
                     stuck_reported = False
-                if (
-                    fp is not None
-                    and not stuck_reported
-                    and now() - fp_since >= config.idle_minutes * 60
-                ):
+                if fp is not None and not stuck_reported and now() - fp_since >= config.idle_minutes * 60:
                     _log_with_events(
                         f"agent looks stuck: no commit and no file change for {config.idle_minutes} minutes"
                     )

@@ -18,6 +18,7 @@ class RunConfig:
     repo: Path
     test: list[str]
     branch: str = ""
+    base: str = ""
     prefix: str = "T"
     command: list[str] = field(default_factory=lambda: ["nightshift"])
     templates: str = ""
@@ -43,7 +44,7 @@ class RunConfig:
 
 _SECTIONS = ("run", "check", "agent")
 
-_RUN_KEYS = {"name", "repo", "branch", "prefix", "command", "templates", "protect"}
+_RUN_KEYS = {"name", "repo", "branch", "base", "prefix", "command", "templates", "protect"}
 _CHECK_KEYS = {"lint", "pre", "test", "min_passed", "wait_seconds", "timeout_hint_seconds"}
 _AGENT_KEYS = {
     "launch",
@@ -89,6 +90,7 @@ def load_config(run_dir: Path) -> RunConfig:
         repo = (run_dir / repo).resolve()
 
     branch = _str(run, "run", "branch", "")
+    base = _str(run, "run", "base", "")
     prefix = _str(run, "run", "prefix", "T")
     if not re.fullmatch(r"[A-Z]{1,3}", prefix):
         raise ConfigError("invalid value for 'run.prefix': 1 to 3 capital letters")
@@ -131,6 +133,7 @@ def load_config(run_dir: Path) -> RunConfig:
         repo=repo,
         test=test,
         branch=branch,
+        base=base,
         prefix=prefix,
         command=command,
         templates=templates,
@@ -220,9 +223,7 @@ def _str_list(table: dict[str, object], where: str, key: str, default: list[str]
     return list(value)
 
 
-def _str_list_of_lists(
-    table: dict[str, object], where: str, key: str, default: list[list[str]]
-) -> list[list[str]]:
+def _str_list_of_lists(table: dict[str, object], where: str, key: str, default: list[list[str]]) -> list[list[str]]:
     """Return a list of commands (each a list of strings) or its default when the key is absent."""
     if key not in table:
         return default

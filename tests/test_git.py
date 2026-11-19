@@ -13,9 +13,7 @@ pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="git not on 
 
 def _git(repo: Path, *args: str) -> str:
     """Run one git command in repo and return its stripped stdout."""
-    result = subprocess.run(
-        ["git", "-C", str(repo), *args], capture_output=True, text=True, stdin=subprocess.DEVNULL
-    )
+    result = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, stdin=subprocess.DEVNULL)
     assert result.returncode == 0, result.stderr
     return result.stdout.strip()
 

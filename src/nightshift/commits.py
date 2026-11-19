@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from nightshift.config import RunConfig
-from nightshift.git import run_git
+from nightshift.git import current_branch, run_git
 from nightshift.items import Item
 
 
@@ -22,12 +22,40 @@ class Commit:
     body: str
 
 
+_FALLBACK_BASES = ("origin/HEAD", "origin/main", "origin/master", "main", "master")
+
+
+def _merge_base(repo: Path, ref: str) -> str | None:
+    """Return merge-base(ref, HEAD), or None when git cannot compute it."""
+    result = run_git(repo, "merge-base", ref, "HEAD")
+    if result.returncode != 0 or not result.stdout.strip():
+        return None
+    return result.stdout.strip()
+
+
 def resolve_base(config: RunConfig) -> str | None:
-    """Return the default range base: merge-base with run.branch when set, else the first commit."""
-    if config.branch:
-        result = run_git(config.repo, "merge-base", config.branch, "HEAD")
-        if result.returncode == 0 and result.stdout.strip():
-            return result.stdout.strip()
+    """Return the default range base for one run.
+
+    When [run] base is set, merge-base(base, HEAD); else when branch is set and differs from the
+    current branch, merge-base(branch, HEAD); else the first of origin/HEAD, origin/main,
+    origin/master, main, master that exists and is not HEAD itself; else the first commit.
+    """
+    repo = config.repo
+    if config.base:
+        base = _merge_base(repo, config.base)
+        if base is not None:
+            return base
+    elif config.branch and config.branch != current_branch(repo):
+        base = _merge_base(repo, config.branch)
+        if base is not None:
+            return base
+    head_result = run_git(repo, "rev-parse", "HEAD")
+    head = head_result.stdout.strip() if head_result.returncode == 0 else ""
+    for candidate in _FALLBACK_BASES:
+        result = run_git(repo, "rev-parse", "--verify", "--quiet", f"{candidate}^{{commit}}")
+        sha = result.stdout.strip() if result.returncode == 0 else ""
+        if sha and sha != head:
+            return sha
     root = run_git(config.repo, "rev-list", "--max-parents=0", "HEAD")
     if root.returncode != 0 or not root.stdout.strip():
         return None
@@ -74,9 +102,7 @@ def commit_report(config: RunConfig, items: list[Item], base: str | None = None)
         short = commit.hash[:7]
         match = pattern.match(commit.subject)
         if match is None:
-            bad_subjects.append(
-                f"{short} bad subject: '{commit.subject}' (expected '{config.prefix}<n>: ...')"
-            )
+            bad_subjects.append(f"{short} bad subject: '{commit.subject}' (expected '{config.prefix}<n>: ...')")
         else:
             by_item.setdefault(int(match.group(1)), []).append(commit)
         if not commit.body.strip():
