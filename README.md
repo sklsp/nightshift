@@ -31,7 +31,7 @@ run time: 3 min (first to last item commit)
 11 runs, 24/24 items, -, 12 sessions, 0 warnings
 ```
 
-All twenty-four items were committed in twelve agent sessions with zero review warnings, and a human reviewed every commit the runs produced.
+All twenty-four items were committed in twelve agent sessions with zero review warnings, and every commit was reviewed (by Claude, as described under "How this was built") before it was merged.
 
 docs/ARCHITECTURE.md explains how nightshift works inside: the life of a run, every module and the supervisor's rules.
 The suite includes an end to end test that drives a fake agent through a real run: supervise launches it as a subprocess and watches it commit every item until the progress file is fully ticked.
