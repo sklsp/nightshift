@@ -19,8 +19,10 @@ def _make_run(tmp_path: Path, repo: Path, test: list[str] | None = None) -> Path
         test = ["pytest"]
     run_dir = tmp_path / "run"
     run_dir.mkdir()
+    # json.dumps, not repr: a Python repr is single-quoted, and TOML single-quoted
+    # strings are literal, so backslashes in Windows paths would survive unescaped.
     (run_dir / "run.toml").write_text(
-        f'[run]\nname = "st"\nrepo = "{repo.as_posix()}"\nprefix = "N"\n[check]\ntest = {test!r}\n',
+        f'[run]\nname = "st"\nrepo = "{repo.as_posix()}"\nprefix = "N"\n[check]\ntest = {json.dumps(test)}\n',
         encoding="utf-8",
     )
     return run_dir
@@ -170,6 +172,32 @@ def test_gate_start_and_wait_via_cli(tmp_path: Path, capsys: pytest.CaptureFixtu
     assert main(["gate", "wait", str(run_dir), "1"]) == 1
     out = capsys.readouterr().out
     assert "no pytest summary line" in out
+
+
+def test_gate_start_passes_extra_args_after_double_dash(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    fast = [sys.executable, "-c", "pass"]
+    run_dir = _make_run(tmp_path, repo, test=fast)
+    assert main(["gate", "start", str(run_dir), "--", "--durations=25"]) == 0
+    capsys.readouterr()
+    mode_lines = (run_dir / ".gate" / "mode").read_text(encoding="utf-8").splitlines()
+    assert mode_lines[1] == f"{fast[0]} -c pass --durations=25"
+
+
+def test_gate_start_without_double_dash_keeps_the_test_command(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    fast = [sys.executable, "-c", "pass"]
+    run_dir = _make_run(tmp_path, repo, test=fast)
+    assert main(["gate", "start", str(run_dir)]) == 0
+    capsys.readouterr()
+    mode_lines = (run_dir / ".gate" / "mode").read_text(encoding="utf-8").splitlines()
+    assert mode_lines[1] == f"{fast[0]} -c pass"
 
 
 def test_gate_file_via_cli(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

@@ -147,6 +147,12 @@ def build_parser() -> argparse.ArgumentParser:
     gate_sub = gate_parser.add_subparsers(dest="gate_command", required=True)
     gate_start = gate_sub.add_parser("start", help="run lint and pre checks, then start the test command detached")
     gate_start.add_argument("run_dir", type=Path, help="path of an existing run directory")
+    gate_start.add_argument(
+        "extra_args",
+        nargs=argparse.REMAINDER,
+        metavar="<extra args>",
+        help="arguments after a literal -- are appended to the test command for this one gate only",
+    )
     gate_wait = gate_sub.add_parser("wait", help="wait for the gated run and report pass or fail")
     gate_wait.add_argument("run_dir", type=Path, help="path of an existing run directory")
     gate_wait.add_argument("n", type=int, help="call number; use a new one on every call")
@@ -497,10 +503,18 @@ def _gate(args: argparse.Namespace) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     if args.gate_command == "start":
-        return start(config, args.run_dir)
+        return start(config, args.run_dir, _strip_double_dash(args.extra_args))
     if args.gate_command == "wait":
         return wait(config, args.run_dir, args.n)
     return file(config, args.run_dir, args.test_file, args.module)
+
+
+def _strip_double_dash(raw: list[str]) -> tuple[str, ...]:
+    """Return the extra test arguments with a leading literal -- removed."""
+    args = list(raw)
+    if args and args[0] == "--":
+        args = args[1:]
+    return tuple(args)
 
 
 def _print_supervisor_events(run_dir: Path) -> None:

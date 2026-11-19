@@ -164,6 +164,14 @@ def test_start_file_gate_rule_names_configured_limit(tmp_path: Path) -> None:
     assert "longer than 45 seconds, run it through the gate" in text
 
 
+def test_start_file_gate_section_mentions_extra_args(tmp_path: Path) -> None:
+    out = tmp_path / "out"
+    render_run(_config(tmp_path), _items(), out)
+    run_dir = out.resolve().as_posix()
+    text = (out / "00-start.md").read_text(encoding="utf-8")
+    assert f"nightshift gate start {run_dir} -- <extra args>" in text
+
+
 def test_check_command_quotes_arguments_with_space_or_glob(tmp_path: Path) -> None:
     config = RunConfig(
         name="demo",

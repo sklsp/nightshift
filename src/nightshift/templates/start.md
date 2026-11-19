@@ -30,7 +30,9 @@ THE GATE
 Your commands time out after 30 seconds. If a check takes longer than one command allows, run it through the gate:
 start it once with `$command gate start $run_dir`, then poll with `$command gate wait $run_dir 1` and again
 with `$command gate wait $run_dir 2`. Each call returns within the command limit; when the check is done, the
-gate says pass or fail. One test file with coverage of one module: `$command gate file $run_dir <test file> <module>`.
+gate says pass or fail. Extra arguments for the test command go after a literal `--` and apply to this one gate
+only: `$command gate start $run_dir -- <extra args>`. One test file with coverage of one module:
+`$command gate file $run_dir <test file> <module>`.
 Check progress any time with `$command status $run_dir`. If a direct run takes longer than the limit, your tests are too slow: fix them.
 
 RULES
