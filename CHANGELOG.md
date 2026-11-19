@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.17.0] - 2026-11-19
+
+- review: new command prints what each item commit changed: files with added and removed lines, test counts before and after the commit, and warning lines under each block (protected paths touched, fewer tests than before, more than 15 files); warnings never change the exit code
+- report: shows the run's branch when it exists in the repo and falls back to HEAD otherwise
+- commits: --base accepts any ref that resolves to a commit, not just branches
+- release: version 0.17.0 and this changelog
+
 ## 0.16.1
 
 - render: when [run] branch is unset and the repo folder does not exist, the start spec names main without calling git
