@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.16.0
+
+- gate: start takes extra arguments for the test command after a literal -- (for example --durations=25); they apply to this one gate only and the rendered start spec shows the form
+- report: reads progress through the .gate copy when cleanup removed the repo file, says 'progress file missing' instead of 0/0 when neither exists, and limits commits to the run's range so a later run reusing the prefix never shows up
+- commits: new [run] base key names the range base as a branch or commit; when unset, merge-base with run.branch if it differs from the current branch, else main or master (or their origin copies) when present and not HEAD itself, else the first commit; documented in init's example and the README table
+- release: version 0.16.0 and this changelog; all three fixes came from real Iris runs (findings 3 to 5)
+
 ## 0.15.0
 
 - config: [run] protect lists path prefixes the agent must never touch; a non-list or a list with a non-string element is rejected at load time
