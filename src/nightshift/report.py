@@ -5,7 +5,7 @@ from pathlib import Path
 from nightshift.commits import resolve_base
 from nightshift.config import load_config
 from nightshift.gate import last_gate_line
-from nightshift.git import commit_log
+from nightshift.git import commit_log, run_git
 from nightshift.items import load_items
 from nightshift.supervise import gate_progress_path, read_run_progress, read_supervisor_events
 
@@ -36,7 +36,10 @@ def build_report(run_dir: Path) -> str:
         lines = [f"# {config.name}", "progress file missing"]
     # only commits in the run's range, so a later run reusing the prefix never shows up here
     base = resolve_base(config)
-    commits = commit_log(config.repo, base=base)
+    # the run's own branch when it exists: a later run's commits (other branches) never show up here
+    tip = config.branch if config.branch and run_git(config.repo, "rev-parse", "--verify", "--quiet",
+                                                       f"{config.branch}^{{commit}}").returncode == 0 else "HEAD"
+    commits = commit_log(config.repo, base=base, tip=tip)
 
     committed_times: list[int] = []
     for item in items:

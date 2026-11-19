@@ -426,10 +426,11 @@ def test_report_shows_only_its_own_commits_when_prefix_is_reused(
     _dated_commit(repo, "b.txt", "B\n", "2026-11-15T23:30:00", "T1: first item")
     b_hash = _short_hash(repo, "HEAD")
 
-    def _run_dir_for(name: str, branch: str) -> Path:
+    def _run_dir_for(name: str, branch: str, base: str = "") -> Path:
         run_dir = tmp_path / f"run-{name}"
         run_dir.mkdir()
         branch_line = f'branch = "{branch}"\n' if branch else ""
+        branch_line += f'base = "{base}"\n' if base else ""
         (run_dir / "run.toml").write_text(
             f'[run]\nname = "{name}"\nrepo = "{repo.as_posix()}"\n{branch_line}prefix = "T"\n[check]\ntest = []\n',
             encoding="utf-8",
@@ -437,7 +438,7 @@ def test_report_shows_only_its_own_commits_when_prefix_is_reused(
         (run_dir / "items.md").write_text("# Items\n\n## first item\nDo it.\n", encoding="utf-8")
         return run_dir
 
-    run_a = _run_dir_for("a", "main")  # forked from main, worked on run-a
+    run_a = _run_dir_for("a", "run-a", base="main")  # worked on run-a, forked from main
     run_b = _run_dir_for("b", "")  # ran directly on main
     (repo / "PROGRESS-a.md").write_text("- [x] T1. first item\n", encoding="utf-8")
     (repo / "PROGRESS-b.md").write_text("- [x] T1. first item\n", encoding="utf-8")

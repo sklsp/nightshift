@@ -53,9 +53,13 @@ def resolve_base(config: RunConfig) -> str | None:
     head = head_result.stdout.strip() if head_result.returncode == 0 else ""
     for candidate in _FALLBACK_BASES:
         result = run_git(repo, "rev-parse", "--verify", "--quiet", f"{candidate}^{{commit}}")
-        sha = result.stdout.strip() if result.returncode == 0 else ""
-        if sha and sha != head:
-            return sha
+        if result.returncode != 0 or not result.stdout.strip():
+            continue
+        # where this branch left the candidate, not the candidate's tip: a run branch off another branch
+        # (v1, say) must not count every commit the candidate does not have
+        base = _merge_base(repo, candidate)
+        if base and base != head:
+            return base
     root = run_git(config.repo, "rev-list", "--max-parents=0", "HEAD")
     if root.returncode != 0 or not root.stdout.strip():
         return None

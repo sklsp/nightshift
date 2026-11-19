@@ -3,15 +3,20 @@
 import subprocess
 from pathlib import Path
 
+GIT_TIMEOUT_SECONDS = 60
 
-def run_git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
-    """Run one git command inside repo and capture its output."""
-    return subprocess.run(
-        ["git", "-C", str(repo), *args],
-        capture_output=True,
-        text=True,
-        stdin=subprocess.DEVNULL,
-    )
+
+def run_git(repo: Path, *args: str, timeout: float = GIT_TIMEOUT_SECONDS) -> subprocess.CompletedProcess[str]:
+    """Run one git command inside repo and capture its output; a git that hangs counts as failed (code 124).
+
+    Without the timeout one hanging `git status` (a pipe left open by another process, seen on Windows in the
+    end-to-end test) would stop the supervisor for ever.
+    """
+    command = ["git", "-C", str(repo), *args]
+    try:
+        return subprocess.run(command, capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return subprocess.CompletedProcess(command, 124, "", f"git timed out after {timeout} s")
 
 
 def current_branch(repo: Path) -> str:
@@ -43,7 +48,9 @@ def fingerprint(repo: Path) -> str | None:
     """Return HEAD's hash plus git status porcelain text, or None when git cannot answer."""
     try:
         head = run_git(repo, "rev-parse", "HEAD")
-        status = run_git(repo, "status", "--porcelain")
+        # --no-optional-locks: a poll must never take the index lock the agent's commit needs (that deadlock hung
+        # the end-to-end test 3 times in 10 on Windows)
+        status = run_git(repo, "--no-optional-locks", "status", "--porcelain")
     except OSError:
         return None
     if head.returncode != 0 or status.returncode != 0:
@@ -51,13 +58,13 @@ def fingerprint(repo: Path) -> str | None:
     return f"{head.stdout.strip()}\n{status.stdout}"
 
 
-def commit_log(repo: Path, base: str | None = None) -> list[tuple[str, int, str]]:
-    """Return (hash, unix time, subject), newest first; when base is given, only commits after it."""
+def commit_log(repo: Path, base: str | None = None, tip: str = "HEAD") -> list[tuple[str, int, str]]:
+    """Return (hash, unix time, subject), newest first, of the commits reachable from tip (after base if given)."""
     try:
         if base is None:
-            result = run_git(repo, "log", "--format=%h %ct %s")
+            result = run_git(repo, "log", tip, "--format=%h %ct %s")
         else:
-            result = run_git(repo, "log", f"{base}..HEAD", "--format=%h %ct %s")
+            result = run_git(repo, "log", f"{base}..{tip}", "--format=%h %ct %s")
     except OSError:
         return []
     if result.returncode != 0:

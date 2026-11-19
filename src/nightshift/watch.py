@@ -28,7 +28,7 @@ def _committed(repo: Path, path: Path) -> bool:
     if not path.is_file():
         # cleanup removed the repo file and watch reads the .gate copy instead
         return True
-    result = run_git(repo, "status", "--porcelain", "--", str(path))
+    result = run_git(repo, "--no-optional-locks", "status", "--porcelain", "--", str(path))
     return result.returncode == 0 and not result.stdout.strip()
 
 

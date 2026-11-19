@@ -68,3 +68,18 @@ def test_commit_log_keeps_a_commit_with_an_empty_subject(tmp_path: Path, git_tem
     _git(repo, "commit", "-q", "--allow-empty", "--allow-empty-message", "-m", "")
     log = commit_log(repo)
     assert [subject for _, _, subject in log] == ["", "root: initial import"]
+
+
+def test_a_git_that_hangs_counts_as_failed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import subprocess
+
+    from nightshift.git import run_git
+
+    def hang(*args, **kwargs):  # type: ignore[no-untyped-def]
+        raise subprocess.TimeoutExpired(cmd=args[0], timeout=kwargs["timeout"])
+
+    monkeypatch.setattr(subprocess, "run", hang)
+    result = run_git(tmp_path, "status", timeout=0.5)
+    assert result.returncode == 124
+    assert result.stderr == "git timed out after 0.5 s"
+    assert fingerprint(tmp_path) is None
