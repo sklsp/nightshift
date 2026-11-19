@@ -15,6 +15,7 @@ from nightshift.commits import CommitError, commit_report
 from nightshift.config import ConfigError, RunConfig, load_config
 from nightshift.gate import clean, file, last_gate_line, start, state, wait
 from nightshift.git import run_git
+from nightshift.history import history_lines
 from nightshift.items import Item, ItemsError, load_items
 from nightshift.progress import Progress, read_progress
 from nightshift.render import RenderError, render_run
@@ -129,6 +130,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--out", type=Path, default=None, help="write the summary to this file instead of stdout"
     )
 
+    history_parser = subparsers.add_parser("history", help="print one row per run dir plus a total line")
+    history_parser.add_argument("run_dirs", nargs="+", type=Path, help="run directories, printed in this order")
+
     commits_parser = subparsers.add_parser("commits", help="check that each item has exactly one well-formed commit")
     commits_parser.add_argument("run_dir", type=Path, help="path of an existing run directory")
     commits_parser.add_argument(
@@ -183,6 +187,8 @@ def main(argv: list[str] | None = None) -> int:
         return _doctor(args.run_dir)
     if args.command == "report":
         return _report(args.run_dir, out=args.out)
+    if args.command == "history":
+        return _history(args.run_dirs)
     if args.command == "commits":
         return _commits(args.run_dir, base=args.base)
     if args.command == "review":
@@ -456,6 +462,13 @@ def _report(run_dir: Path, out: Path | None = None) -> int:
             return 1
         return 0
     sys.stdout.write(text)
+    return 0
+
+
+def _history(run_dirs: list[Path]) -> int:
+    """Print one row per run dir plus a total line; missing dirs are noted and skipped."""
+    for line in history_lines(run_dirs):
+        print(line)
     return 0
 
 

@@ -7,6 +7,7 @@ from nightshift.config import RunConfig, load_config
 from nightshift.gate import last_gate_line
 from nightshift.git import commit_log, run_git
 from nightshift.items import Item, load_items
+from nightshift.progress import Progress
 from nightshift.review import item_warnings
 from nightshift.supervise import gate_progress_path, read_run_progress, read_supervisor_events
 
@@ -36,11 +37,7 @@ def build_report(run_dir: Path) -> str:
     else:
         lines = [f"# {config.name}", "progress file missing"]
     # only commits in the run's range, so a later run reusing the prefix never shows up here
-    base = resolve_base(config)
-    # the run's own branch when it exists: a later run's commits (other branches) never show up here
-    tip = config.branch if config.branch and run_git(config.repo, "rev-parse", "--verify", "--quiet",
-                                                       f"{config.branch}^{{commit}}").returncode == 0 else "HEAD"
-    commits = commit_log(config.repo, base=base, tip=tip)
+    commits = run_commits(config)
 
     committed_times: list[int] = []
     for item in items:
@@ -59,9 +56,9 @@ def build_report(run_dir: Path) -> str:
                 committed_times.append(commit_time)
         lines.append(f"- {marker} {item.title}: {state_text}")
 
-    if len(committed_times) >= 2:
-        run_seconds = committed_times[-1] - committed_times[0]
-        lines.append(f"run time: {format_minutes(run_seconds)} (first to last item commit)")
+    seconds = run_seconds(items, config, progress, commits)
+    if seconds is not None:
+        lines.append(f"run time: {format_minutes(seconds)} (first to last item commit)")
     gate_line = last_gate_line(run_dir)
     if gate_line != "last gate: none":
         lines.append(gate_line)
@@ -70,6 +67,32 @@ def build_report(run_dir: Path) -> str:
     _append_section(lines, run_dir / "BUGS.md", "Bugs found")
     _append_section(lines, run_dir / "IDEAS.md", "Ideas")
     return "\n".join(lines) + "\n"
+
+
+def run_commits(config: RunConfig) -> list[tuple[str, int, str]]:
+    """Return (hash, unix time, subject), newest first, of the commits in one run's range."""
+    base = resolve_base(config)
+    # the run's own branch when it exists: a later run's commits (other branches) never show up here
+    tip = config.branch if config.branch and run_git(
+        config.repo, "rev-parse", "--verify", "--quiet", f"{config.branch}^{{commit}}"
+    ).returncode == 0 else "HEAD"
+    return commit_log(config.repo, base=base, tip=tip)
+
+
+def run_seconds(
+    items: list[Item], config: RunConfig, progress: Progress, commits: list[tuple[str, int, str]]
+) -> int | None:
+    """Return the seconds from first to last item commit in item order, or None when fewer than two committed."""
+    times: list[int] = []
+    for item in items:
+        if item.number in progress.blocked:
+            continue
+        found = _find_commit(commits, f"{config.prefix}{item.number}:")
+        if found is not None:
+            times.append(found[1])
+    if len(times) < 2:
+        return None
+    return times[-1] - times[0]
 
 
 def _note_lines(path: Path) -> list[str]:
@@ -97,19 +120,34 @@ def _append_section(lines: list[str], path: Path, title: str) -> None:
     lines.extend(note_lines)
 
 
-def _review_section(config: RunConfig, items: list[Item], commits: list[tuple[str, int, str]]) -> list[str]:
-    """Return the '## Review' section lines with every warning review would print, or '- no warnings'."""
-    body: list[str] = []
+def review_warnings(config: RunConfig, items: list[Item], commits: list[tuple[str, int, str]]) -> list[tuple[str, str]]:
+    """Return (item marker, warning text) pairs for every committed item; empty when clean."""
+    pairs: list[tuple[str, str]] = []
     for item in items:
-        marker = f"{config.prefix}{item.number}"
-        found = _find_commit(commits, f"{marker}:")
+        found = _find_commit(commits, f"{config.prefix}{item.number}:")
         if found is None:
             continue
         for warning in item_warnings(config, found[0]):
-            body.append(f"- {marker}: {warning}")
+            pairs.append((f"{config.prefix}{item.number}", warning))
+    return pairs
+
+
+def _review_section(config: RunConfig, items: list[Item], commits: list[tuple[str, int, str]]) -> list[str]:
+    """Return the '## Review' section lines with every warning review would print, or '- no warnings'."""
+    body = [f"- {marker}: {warning}" for marker, warning in review_warnings(config, items, commits)]
     if not body:
         body.append("- no warnings")
     return ["", "## Review"] + body
+
+
+def _event_count(events: list[dict[str, str]], prefix: str) -> int:
+    """Return how many supervisor events start with one message prefix."""
+    return sum(1 for event in events if event["msg"].startswith(prefix))
+
+
+def session_count(run_dir: Path) -> int:
+    """Return how many 'session N ended' events the run's supervisor logged."""
+    return _event_count(read_supervisor_events(run_dir), "session ")
 
 
 def _supervisor_lines(run_dir: Path) -> list[str]:
@@ -117,7 +155,7 @@ def _supervisor_lines(run_dir: Path) -> list[str]:
     events = read_supervisor_events(run_dir)
     kept: list[tuple[int, str]] = []
     for prefix, label in _SUPERVISOR_PREFIXES:
-        count = sum(1 for event in events if event["msg"].startswith(prefix))
+        count = _event_count(events, prefix)
         if count:
             kept.append((count, f"{label}s" if count != 1 else label))
     if not kept:
