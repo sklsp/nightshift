@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.16.1
+
+- render: when [run] branch is unset and the repo folder does not exist, the start spec names main without calling git
+- tests: supervise unit tests that are not about git pass fake git helpers instead of spawning about 66 real git calls per run
+- release: version 0.16.1 and this changelog
+
 ## 0.16.0
 
 - gate: start takes extra arguments for the test command after a literal -- (for example --durations=25); they apply to this one gate only and the rendered start spec shows the form
