@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.17.2] - 2026-11-19
+
+- template: start spec gains a rule that never kills processes by name (Stop-Process -Name python, taskkill /IM python.exe and pkill python all kill the supervisor and watch too); stop only what you started, by the pid you saved
+- lessons: new "Never kill by name" section with what happened in the Iris run and the rule
+- release: version 0.17.2 and this changelog
+
 ## [0.17.1] - 2026-11-19
 
 - report: adds a Review section between run time and Supervisor with every warning review would print, prefixed by the item id; when there are none it says `- no warnings`, so a reader knows the check ran
