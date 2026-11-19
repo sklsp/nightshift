@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.0] - 2026-11-19
+
+- supervise: records each item commit (short hash and unix time) as an event of its own in the supervisor log, so a run remembers its commits even when git no longer shows them as a separate range
+- report and history: fall back to the recorded commits when the branch is already merged, so per-item times and the run time line still show after the merge
+- README: one sentence in the report section that a supervised run remembers its item commits, so report and history still work after the branch is merged
+- release: version 0.19.0 and this changelog
+
 ## [0.18.0] - 2026-11-19
 
 - history: new command prints one row per run dir plus a total line across several runs, reusing report's numbers for items, run time, sessions and warnings; missing dirs are noted and skipped
