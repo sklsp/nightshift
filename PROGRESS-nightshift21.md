@@ -1,3 +1,0 @@
-- [x] Y1. render: no git when the repo folder does not exist (275 passed in 33.11s)
-- [x] Y2. tests: supervise unit tests without real git (275 passed in 30.89s)
-- [x] Y3. release 0.16.1 (275 passed in 30.35s)
