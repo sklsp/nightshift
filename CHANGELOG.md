@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.18.0] - 2026-11-19
+
+- history: new command prints one row per run dir plus a total line across several runs, reusing report's numbers for items, run time, sessions and warnings; missing dirs are noted and skipped
+- README: Track record section with the total line from eleven real runs on another project (Iris)
+- release: version 0.18.0 and this changelog
+
 ## [0.17.2] - 2026-11-19
 
 - template: start spec gains a rule that never kills processes by name (Stop-Process -Name python, taskkill /IM python.exe and pkill python all kill the supervisor and watch too); stop only what you started, by the pid you saved
