@@ -1012,3 +1012,33 @@ def test_item_committed_before_the_run_is_not_recorded(tmp_path: Path, monkeypat
     assert code == 1
     # The pre-run commit is outside the range, so no item event may be logged for it.
     assert not any(f"item {config.prefix}1 committed" in line for line in logs)
+
+
+def test_an_item_ticked_before_its_commit_is_recorded_once_the_commit_lands(tmp_path: Path, monkeypatch) -> None:
+    config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5)
+    _git_init(config.repo)
+    _git_commit(config.repo, "base.txt", "base", "chore: start")
+    clock = Clock()
+    calls = {"n": 0}
+    hashes: dict[str, tuple[str, int]] = {}
+
+    def fake_is_running(cfg: RunConfig, quiet: bool = False) -> bool:
+        calls["n"] += 1
+        n = calls["n"]
+        if n == 3:  # session 1 ends with T1 ticked but its commit not made yet
+            (cfg.repo / "PROGRESS-sup.md").write_text(_PARTIAL_TICKED, encoding="utf-8")
+        if n == 5:  # session 2: both commits land, then both are ticked
+            hashes["1"] = _git_commit(cfg.repo, "one.txt", "one", f"{cfg.prefix}1: do the first thing")
+            hashes["2"] = _git_commit(cfg.repo, "two.txt", "two", f"{cfg.prefix}2: do the second thing")
+            (cfg.repo / "PROGRESS-sup.md").write_text(_TICKED, encoding="utf-8")
+        return n in (2, 5)
+
+    monkeypatch.setattr(agent_module, "is_running", fake_is_running)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
+
+    logs: list[str] = []
+    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+
+    assert code == 0
+    first = [line for line in logs if line.startswith(f"item {config.prefix}1 committed")]
+    assert first == [f"item {config.prefix}1 committed {hashes['1'][0]} at {hashes['1'][1]}"]

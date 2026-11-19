@@ -1,3 +1,0 @@
-- [x] D1. supervise: record each item commit in the event log
-- [x] D2. report and history: fall back to the recorded commits
-- [x] D3. release 0.19.0 (288 passed in 43.47s)

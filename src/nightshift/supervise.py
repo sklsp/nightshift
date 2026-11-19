@@ -290,12 +290,14 @@ def supervise(
                             break
             progress = read_run_progress(progress_path, config.prefix, run_dir, _log_with_events)
             new_items = [number for number in progress.done if number not in recorded_items]
-            recorded_items.update(new_items)
             if new_items:
                 commits = run_commits(config)
                 for number in new_items:
                     found = find_commit(commits, f"{config.prefix}{number}:")
                     if found is not None:
+                        # only now is it recorded: an item ticked before its commit landed is tried again
+                        # at the next session end instead of being skipped for good
+                        recorded_items.add(number)
                         _log_with_events(f"item {config.prefix}{number} committed {found[0]} at {found[1]}")
             _log_with_events(
                 f"session {session} ended: {len(progress.done)}/{total} done, {len(progress.blocked)} blocked"
