@@ -12,7 +12,9 @@ another supervisor is running and this one refuses to start; a dead pid means
 a crash left the lock behind and it is removed and taken over.
 
 Every logged line is also appended to .gate/supervise.jsonl with a timestamp,
-so a run stays readable after the fact.
+so a run stays readable after the fact. When an item gets ticked, its commit
+(short hash and unix time) is recorded as an event of its own, so the run's
+commits stay known even when git no longer shows them as a separate range.
 """
 
 import contextlib
@@ -27,6 +29,7 @@ from datetime import datetime
 from pathlib import Path
 
 from nightshift import agent, git
+from nightshift.commits import find_commit, run_commits
 from nightshift.config import RunConfig
 from nightshift.items import load_items
 from nightshift.progress import Progress, read_progress
@@ -203,6 +206,7 @@ def supervise(
         launch_failures = 0
         last_done = 0
         unknown_streak = 0
+        recorded_items: set[int] = set()
 
         def _status() -> bool | None:
             """Poll the agent once, at most every poll_seconds; log unknown streak boundaries."""
@@ -285,6 +289,14 @@ def supervise(
                         if stop_status is False or (stop_status is None and _status_gave_up()):
                             break
             progress = read_run_progress(progress_path, config.prefix, run_dir, _log_with_events)
+            new_items = [number for number in progress.done if number not in recorded_items]
+            recorded_items.update(new_items)
+            if new_items:
+                commits = run_commits(config)
+                for number in new_items:
+                    found = find_commit(commits, f"{config.prefix}{number}:")
+                    if found is not None:
+                        _log_with_events(f"item {config.prefix}{number} committed {found[0]} at {found[1]}")
             _log_with_events(
                 f"session {session} ended: {len(progress.done)}/{total} done, {len(progress.blocked)} blocked"
             )

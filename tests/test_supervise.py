@@ -41,6 +41,9 @@ Do the second thing and tick it.
 
 _UNTICKED = "- [ ] T1. first item\n- [ ] T2. second item\n"
 _TICKED = "- [x] T1. first item (1 passed in 0.01s)\n- [x] T2. second item (2 passed in 0.01s)\n"
+_PARTIAL_TICKED = "- [x] T1. first item (1 passed in 0.01s)\n- [ ] T2. second item\n"
+
+
 
 
 def _setup(
@@ -919,3 +922,93 @@ def test_starts_when_on_the_right_branch(tmp_path: Path, monkeypatch) -> None:
 
     assert code == 0
     assert logs == ["session 1 ended: 2/2 done, 0 blocked"]
+
+
+def _git_commit(repo: Path, file_name: str, text: str, message: str) -> tuple[str, int]:
+    """Commit one file in repo and return the commit's short hash and unix time."""
+    (repo / file_name).write_text(text, encoding="utf-8")
+    env = dict(
+        os.environ,
+        GIT_AUTHOR_NAME="nightshift test",
+        GIT_AUTHOR_EMAIL="test@nightshift.local",
+        GIT_COMMITTER_NAME="nightshift test",
+        GIT_COMMITTER_EMAIL="test@nightshift.local",
+    )
+    subprocess.run(
+        ["git", "add", file_name], cwd=repo, check=True, capture_output=True, text=True, stdin=subprocess.DEVNULL
+    )
+    subprocess.run(
+        ["git", "commit", "-q", "-m", message],
+        cwd=repo,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+        stdin=subprocess.DEVNULL,
+    )
+    result = subprocess.run(
+        ["git", "log", "-1", "--format=%h %ct"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+        stdin=subprocess.DEVNULL,
+    )
+    short_hash, _, unix_time = result.stdout.strip().partition(" ")
+    return short_hash, int(unix_time)
+
+
+def test_newly_ticked_items_record_their_commits(tmp_path: Path, monkeypatch) -> None:
+    config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5)
+    _git_init(config.repo)
+    # A base commit first: the run's range starts after it, so both item commits are inside.
+    _git_commit(config.repo, "base.txt", "base", "chore: start")
+    first_hash, first_time = _git_commit(
+        config.repo, "one.txt", "one", f"{config.prefix}1: do the first thing"
+    )
+    second_hash, second_time = _git_commit(
+        config.repo, "two.txt", "two", f"{config.prefix}2: do the second thing"
+    )
+    clock = Clock()
+    calls = {"n": 0}
+
+    def fake_is_running(cfg: RunConfig, quiet: bool = False) -> bool:
+        calls["n"] += 1
+        if calls["n"] == 3:
+            (cfg.repo / "PROGRESS-sup.md").write_text(_TICKED, encoding="utf-8")
+        return calls["n"] in (2, 3)
+
+    monkeypatch.setattr(agent_module, "is_running", fake_is_running)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
+
+    logs: list[str] = []
+    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+
+    assert code == 0
+    assert f"item {config.prefix}1 committed {first_hash} at {first_time}" in logs
+    assert f"item {config.prefix}2 committed {second_hash} at {second_time}" in logs
+
+
+def test_item_committed_before_the_run_is_not_recorded(tmp_path: Path, monkeypatch) -> None:
+    config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5)
+    _git_init(config.repo)
+    # The item was committed before the run started: it is not in the run's range.
+    _git_commit(config.repo, "one.txt", "one", f"{config.prefix}1: do the first thing")
+    clock = Clock()
+    calls = {"n": 0}
+
+    def fake_is_running(cfg: RunConfig, quiet: bool = False) -> bool:
+        calls["n"] += 1
+        if calls["n"] == 3:
+            (cfg.repo / "PROGRESS-sup.md").write_text(_PARTIAL_TICKED, encoding="utf-8")
+        return calls["n"] in (2, 3)
+
+    monkeypatch.setattr(agent_module, "is_running", fake_is_running)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
+
+    logs: list[str] = []
+    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+
+    assert code == 1
+    # The pre-run commit is outside the range, so no item event may be logged for it.
+    assert not any(f"item {config.prefix}1 committed" in line for line in logs)
