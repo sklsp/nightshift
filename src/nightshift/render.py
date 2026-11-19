@@ -60,7 +60,7 @@ def _start_text(config: RunConfig, total: int, run_dir: Path, templates_dir: Pat
         "start.md",
         {
             "name": config.name,
-            "branch": config.branch or current_branch(config.repo) or "main",  # never empty backticks
+            "branch": _branch_name(config),  # never empty backticks
             "prefix": config.prefix,
             "total": str(total),
             "first_item": item_paths[0],
@@ -74,6 +74,16 @@ def _start_text(config: RunConfig, total: int, run_dir: Path, templates_dir: Pat
             "protected": _protected_line(config),
         },
     )
+
+
+def _branch_name(config: RunConfig) -> str:
+    """Return the branch to name in the spec, without calling git when the repo folder does not exist."""
+    if config.branch:
+        return config.branch
+    if not config.repo.is_dir():
+        # most render tests and a run dir rendered before the repo is cloned hit this; skip the git call
+        return "main"
+    return current_branch(config.repo) or "main"
 
 
 def _item_text(config: RunConfig, item: Item, total: int, run_dir: Path, templates_dir: Path | None) -> str:

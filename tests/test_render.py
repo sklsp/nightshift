@@ -268,6 +268,33 @@ def test_start_file_names_a_branch_when_none_is_configured(tmp_path: Path) -> No
     assert "``" not in text
 
 
+def test_missing_repo_folder_skips_git_and_uses_main(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def _fail(*args: object, **kwargs: object) -> str:
+        raise AssertionError("current_branch must not be called when the repo folder does not exist")
+
+    monkeypatch.setattr("nightshift.render.current_branch", _fail)
+    out = tmp_path / "out"
+    render_run(_config(tmp_path), _items(), out)
+    text = (out / "00-start.md").read_text(encoding="utf-8")
+    assert "branch `main`" in text
+
+
+def test_existing_repo_folder_still_asks_git_for_branch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    (tmp_path / "repo").mkdir()
+    calls: list[Path] = []
+
+    def _fake(repo: Path) -> str:
+        calls.append(repo)
+        return "dev"
+
+    monkeypatch.setattr("nightshift.render.current_branch", _fake)
+    out = tmp_path / "out"
+    render_run(_config(tmp_path), _items(), out)
+    text = (out / "00-start.md").read_text(encoding="utf-8")
+    assert "branch `dev`" in text
+    assert calls == [tmp_path / "repo"]
+
+
 def _write_run_toml(run_dir: Path, text: str) -> None:
     """Write a run.toml into the given directory."""
     (run_dir / "run.toml").write_text(text, encoding="utf-8")
