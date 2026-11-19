@@ -86,6 +86,16 @@ def _expected_message(run_dir: Path) -> str:
     )
 
 
+def no_fingerprint(repo: Path) -> str | None:
+    """Stand in for git.fingerprint where a test's repo is not a git repository."""
+    return None
+
+
+def no_git_dir(repo: Path) -> Path | None:
+    """Stand in for git.git_dir where a test's repo is not a git repository."""
+    return None
+
+
 def test_supervise_finishes_when_progress_gets_ticked(tmp_path: Path, monkeypatch) -> None:
     config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5)
     clock = Clock()
@@ -107,7 +117,10 @@ def test_supervise_finishes_when_progress_gets_ticked(tmp_path: Path, monkeypatc
     monkeypatch.setattr(agent_module, "launch", fake_launch)
 
     logs: list[str] = []
-    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+    code = supervise(
+        config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append,
+        fingerprint=no_fingerprint, git_dir=no_git_dir
+    )
 
     assert code == 0
     assert launches == [_expected_message(run_dir)]
@@ -128,7 +141,10 @@ def test_supervise_stops_at_max_sessions(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(agent_module, "launch", fake_launch)
 
     logs: list[str] = []
-    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+    code = supervise(
+        config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append,
+        fingerprint=no_fingerprint, git_dir=no_git_dir
+    )
 
     assert code == 1
     assert len(launches) == 2
@@ -154,7 +170,10 @@ def test_supervise_stops_after_three_empty_sessions(tmp_path: Path, monkeypatch)
     monkeypatch.setattr(agent_module, "launch", fake_launch)
 
     logs: list[str] = []
-    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+    code = supervise(
+        config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append,
+        fingerprint=no_fingerprint, git_dir=no_git_dir
+    )
 
     assert code == 1
     # Three sessions ran and ended without progress; the fourth launch never happened.
@@ -181,7 +200,10 @@ def test_supervise_does_not_launch_while_running(tmp_path: Path, monkeypatch) ->
     monkeypatch.setattr(agent_module, "launch", fake_launch)
 
     logs: list[str] = []
-    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+    code = supervise(
+        config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append,
+        fingerprint=no_fingerprint, git_dir=no_git_dir
+    )
 
     assert code == 1
     assert events.count("launch") == 1
@@ -204,7 +226,10 @@ def test_supervise_never_polls_faster_than_poll_seconds(tmp_path: Path, monkeypa
     monkeypatch.setattr(agent_module, "launch", lambda cfg, message: None)
 
     logs: list[str] = []
-    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+    code = supervise(
+        config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append,
+        fingerprint=no_fingerprint, git_dir=no_git_dir
+    )
 
     assert code == 1
     gaps = [b - a for a, b in zip(times, times[1:], strict=False)]
@@ -226,7 +251,10 @@ def test_grace_period_waits_for_agent_to_start(tmp_path: Path, monkeypatch) -> N
     monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
 
     logs: list[str] = []
-    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+    code = supervise(
+        config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append,
+        fingerprint=no_fingerprint, git_dir=no_git_dir
+    )
 
     assert code == 0
     assert logs == ["session 1 ended: 2/2 done, 0 blocked"]
@@ -240,7 +268,10 @@ def test_grace_period_logs_when_agent_never_starts(tmp_path: Path, monkeypatch) 
     monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
 
     logs: list[str] = []
-    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+    code = supervise(
+        config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append,
+        fingerprint=no_fingerprint, git_dir=no_git_dir
+    )
 
     assert code == 1
     # Every launch failed to start; the backoff doubled between sessions.
@@ -265,7 +296,10 @@ def test_fast_agent_that_finishes_before_any_poll_ends_the_run(tmp_path: Path, m
     monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
 
     logs: list[str] = []
-    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+    code = supervise(
+        config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append,
+        fingerprint=no_fingerprint, git_dir=no_git_dir
+    )
 
     assert code == 0
     # The finished work is treated as a normal session end: no relaunch and no backoff.
@@ -293,7 +327,10 @@ def test_failed_start_backs_off_then_the_next_session_finishes(tmp_path: Path, m
     monkeypatch.setattr(agent_module, "launch", fake_launch)
 
     logs: list[str] = []
-    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+    code = supervise(
+        config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append,
+        fingerprint=no_fingerprint, git_dir=no_git_dir
+    )
 
     assert code == 0
     # The first launch never came up and backed off; the second one finished the run.
@@ -314,7 +351,10 @@ def test_repeated_failed_starts_end_with_exit_code_two(tmp_path: Path, monkeypat
     monkeypatch.setattr(agent_module, "launch", fake_launch)
 
     logs: list[str] = []
-    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+    code = supervise(
+        config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append,
+        fingerprint=no_fingerprint, git_dir=no_git_dir
+    )
 
     assert code == 2
     # The default cap is six failed starts; the supervisor gives up and asks for a human.
@@ -339,7 +379,10 @@ def test_launch_code_in_ok_codes_is_not_logged(tmp_path: Path, monkeypatch) -> N
     monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 1)
 
     logs: list[str] = []
-    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+    code = supervise(
+        config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append,
+        fingerprint=no_fingerprint, git_dir=no_git_dir
+    )
 
     assert code == 0
     assert logs == ["session 1 ended: 2/2 done, 0 blocked"]
@@ -361,7 +404,10 @@ def test_launch_code_outside_ok_codes_is_logged(tmp_path: Path, monkeypatch) -> 
     monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 1)
 
     logs: list[str] = []
-    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+    code = supervise(
+        config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append,
+        fingerprint=no_fingerprint, git_dir=no_git_dir
+    )
 
     assert code == 0
     assert logs == ["agent launch exited with code 1", "session 1 ended: 2/2 done, 0 blocked"]
@@ -375,7 +421,10 @@ def test_launch_backoff_is_capped_at_fifteen_minutes(tmp_path: Path, monkeypatch
     monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
 
     logs: list[str] = []
-    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+    code = supervise(
+        config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append,
+        fingerprint=no_fingerprint, git_dir=no_git_dir
+    )
 
     assert code == 2
     # The backoff doubles (600 then 1200) but never exceeds the fifteen minute cap.
@@ -403,7 +452,10 @@ def test_changing_fingerprint_never_triggers(tmp_path: Path, monkeypatch) -> Non
         return f"fp-{calls['n']}"
 
     logs: list[str] = []
-    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append, fingerprint=fingerprint)
+    code = supervise(
+        config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append, fingerprint=fingerprint,
+        git_dir=no_git_dir
+    )
 
     assert code == 0
     assert not any("agent looks stuck" in line for line in logs)
@@ -425,7 +477,8 @@ def test_unchanged_fingerprint_triggers_and_runs_stop_once(tmp_path: Path, monke
 
     logs: list[str] = []
     code = supervise(
-        config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append, fingerprint=lambda repo: "same"
+        config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append, fingerprint=lambda repo: "same",
+        git_dir=no_git_dir
     )
 
     assert code == 1
@@ -450,7 +503,8 @@ def test_unchanged_fingerprint_without_stop_only_logs(tmp_path: Path, monkeypatc
 
     logs: list[str] = []
     code = supervise(
-        config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append, fingerprint=lambda repo: "same"
+        config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append, fingerprint=lambda repo: "same",
+        git_dir=no_git_dir
     )
 
     assert code == 1
@@ -534,7 +588,10 @@ def test_supervise_copies_progress_to_gate_dir(tmp_path: Path, monkeypatch) -> N
     monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
 
     logs: list[str] = []
-    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+    code = supervise(
+        config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append,
+        fingerprint=no_fingerprint, git_dir=no_git_dir
+    )
 
     assert code == 0
     copy = run_dir / ".gate" / "progress.md"
@@ -562,7 +619,10 @@ def test_supervise_uses_gate_copy_when_repo_progress_deleted(tmp_path: Path, mon
     monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
 
     logs: list[str] = []
-    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+    code = supervise(
+        config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append,
+        fingerprint=no_fingerprint, git_dir=no_git_dir
+    )
 
     assert code == 0
     # The finished state survived the cleanup because the supervisor read its own copy.
@@ -580,7 +640,10 @@ def test_supervise_missing_progress_everywhere_means_not_started(tmp_path: Path,
     monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
 
     logs: list[str] = []
-    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+    code = supervise(
+        config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append,
+        fingerprint=no_fingerprint, git_dir=no_git_dir
+    )
 
     assert code == 1
     # Nothing was copied because there was nothing to copy.
@@ -603,7 +666,10 @@ def test_unknown_status_keeps_session_going_and_logs_recovery(tmp_path: Path, mo
     monkeypatch.setattr(agent_module, "launch", lambda cfg, message: launches.append(message))
 
     logs: list[str] = []
-    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+    code = supervise(
+        config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append,
+        fingerprint=no_fingerprint, git_dir=no_git_dir
+    )
 
     assert code == 1
     # The unknown polls did not end the session and did not trigger a launch; only the clean False ended it.
@@ -625,7 +691,10 @@ def test_ten_unknown_statuses_end_the_session(tmp_path: Path, monkeypatch) -> No
     monkeypatch.setattr(agent_module, "launch", lambda cfg, message: launches.append(message))
 
     logs: list[str] = []
-    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+    code = supervise(
+        config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append,
+        fingerprint=no_fingerprint, git_dir=no_git_dir
+    )
 
     assert code == 1
     assert launches == []
@@ -645,7 +714,10 @@ def test_a_session_after_an_unknown_give_up_gets_a_fresh_budget(tmp_path: Path, 
     monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
 
     logs: list[str] = []
-    supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+    supervise(
+        config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append,
+        fingerprint=no_fingerprint, git_dir=no_git_dir
+    )
 
     # Without the reset, session 2's first unknown poll would end it at once and never log the recovery.
     assert "agent status readable again after 1 failed polls" in logs
@@ -666,7 +738,10 @@ def test_finished_run_writes_a_timestamped_event_log(tmp_path: Path, monkeypatch
     monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
 
     logs: list[str] = []
-    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+    code = supervise(
+        config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append,
+        fingerprint=no_fingerprint, git_dir=no_git_dir
+    )
 
     assert code == 0
     events_path = run_dir / ".gate" / "supervise.jsonl"
@@ -689,7 +764,10 @@ def test_unwritable_gate_does_not_stop_the_supervisor(tmp_path: Path, monkeypatc
     monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
 
     logs: list[str] = []
-    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+    code = supervise(
+        config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append,
+        fingerprint=no_fingerprint, git_dir=no_git_dir
+    )
 
     assert code == 1
     # The supervisor kept running and logging even though .gate cannot hold the event log or the progress copy.

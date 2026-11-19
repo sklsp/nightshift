@@ -99,12 +99,12 @@ def _pid_alive(pid: int) -> bool:
     return True
 
 
-def _lock_path(repo: Path) -> Path | None:
+def _lock_path(repo: Path, git_dir: Callable[[Path], Path | None]) -> Path | None:
     """Return the supervisor lock file inside repo's git dir, or None when there is no git dir."""
-    git_dir = git.git_dir(repo)
-    if git_dir is None:
+    directory = git_dir(repo)
+    if directory is None:
         return None
-    return git_dir / _LOCK_NAME
+    return directory / _LOCK_NAME
 
 
 def _take_lock(lock_path: Path, run_dir: Path, log: Callable[[str], None], alive: Callable[[int], bool]) -> bool:
@@ -163,6 +163,7 @@ def supervise(
     log: Callable[[str], None] = _log,
     fingerprint: Callable[[Path], str | None] = git.fingerprint,
     alive: Callable[[int], bool] = _pid_alive,
+    git_dir: Callable[[Path], Path | None] = git.git_dir,
 ) -> int:
     """Relaunch the agent until every item is done or a stop condition hits."""
     total = len(load_items(run_dir))
@@ -193,7 +194,7 @@ def supervise(
             _log_with_events(f"repo is on branch {actual}, this run needs {config.branch}; refusing to start")
             return 2
 
-    lock_path = _lock_path(config.repo)
+    lock_path = _lock_path(config.repo, git_dir)
     if lock_path is not None and not _take_lock(lock_path, run_dir, _log_with_events, alive):
         return 2
     try:
