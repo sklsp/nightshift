@@ -6,7 +6,7 @@ Rules learned the hard way on real unattended runs. Each one cost time when it w
 Agents read ahead: given a list of ten items they start planning item four while doing item one, and drift. One spec file per item, opened only when its turn comes, keeps the working set to exactly what is being done now. The render step exists so you never hand-write these files.
 
 ## The progress file is the single source of truth
-PROGRESS-<name>.md in the repo root is the only record of what is done; it is committed with each item, so a crashed session resumes from git state instead of chat history. Each tick carries the last pytest line, which lands proof and commit together.
+PROGRESS-<name>.md in the repo root is the only record of what is done; it is committed with each item, so a crashed session resumes from git state instead of chat history. Each tick carries the last pytest line, which lands proof and commit together. When every item is done or blocked and the supervisor has exited, `nightshift finish` drops the file; dropping it while the supervisor still runs would make the run look undone and restart it.
 
 ## The 30 second command limit and the detached gate
 Agent terminals kill commands that run longer than about 30 seconds, but a real test suite takes minutes. The gate starts the check in a detached process and writes its output to files; each wait call returns within the limit and reads those files. If your direct check does not fit the limit, the tests are too slow: fix them instead of raising the limit.

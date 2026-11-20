@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- finish: new command drops PROGRESS-<name>.md once every item is done or blocked and the supervisor has exited, refusing while another process holds the supervisor lock or any item is still open; README quick start and docs/LESSONS.md point at it
+
 ## [0.19.0] - 2026-11-19
 
 - supervise: records each item commit (short hash and unix time) as an event of its own in the supervisor log, so a run remembers its commits even when git no longer shows them as a separate range

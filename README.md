@@ -89,6 +89,14 @@ Python 3.11 or newer; no other dependencies. This puts `nightshift` on your PATH
    nightshift report myrun
    ```
 
+7. When the run is over and the supervisor has exited, drop the progress file from the repo:
+
+   ```
+   nightshift finish myrun
+   ```
+
+   It refuses while another process holds the supervisor lock or any item is still open; dropping the file while the supervisor still runs would make the run look undone and restart it.
+
 To run several runs back to back, use `nightshift queue <run dir> [<run dir> ...]`: it first checks that every run dir exists with a run.toml, then supervises them in order and stops at the first non-zero exit code.
 
 The supervisor survives a machine that refuses to start processes: an unreadable status is treated as unknown and a failed launch is retried with backoff; see `agent.launch_backoff_seconds` and `agent.max_launch_failures` in the config reference.
