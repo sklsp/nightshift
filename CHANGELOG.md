@@ -2,7 +2,10 @@
 
 ## Unreleased
 
+## [0.20.0] - 2026-11-20
+
 - finish: new command drops PROGRESS-<name>.md once every item is done or blocked and the supervisor has exited, refusing while another process holds the supervisor lock or any item is still open; README quick start and docs/LESSONS.md point at it
+- init: --base sets base in the copied run.toml with --from, replacing an existing base line or inserting one after branch (or name) when there is none
 
 ## [0.19.0] - 2026-11-19
 
