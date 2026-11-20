@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## [0.21.0] - 2026-11-20
+
+- supervise: agent.item_minutes caps how long one item may stay next; when it passes without a commit, the supervisor appends BLOCKED to its progress line and stops the agent once so the run moves on
+
 ## [0.20.0] - 2026-11-20
 
 - finish: new command drops PROGRESS-<name>.md once every item is done or blocked and the supervisor has exited, refusing while another process holds the supervisor lock or any item is still open; README quick start and docs/LESSONS.md point at it

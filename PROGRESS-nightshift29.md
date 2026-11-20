@@ -1,2 +1,2 @@
 - [x] H1. supervise: a time limit per item (313 passed in 49.99s)
-- [ ] H2. docs and release 0.21.0
+- [x] H2. docs and release 0.21.0 (313 passed in 50.22s)

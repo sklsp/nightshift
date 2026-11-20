@@ -202,6 +202,7 @@ myrun/                  the run directory, outside the repo
 | `agent.max_sessions` | `20` | sessions allowed before the supervisor gives up |
 | `agent.launch_grace_polls` | `4` | status polls to wait for a launched agent to report running; if it never does, the supervisor backs off and relaunches without counting the session as empty |
 | `agent.idle_minutes` | `60` | minutes without a repo change (HEAD plus git status) before the supervisor reports the agent stuck |
+| `agent.item_minutes` | `0` | minutes an item may stay next before the supervisor marks it BLOCKED and moves on to the next item; 0 disables the limit |
 | `agent.stop` | `[]` | command run once to end a session when it looks stuck; empty means do nothing |
 | `agent.status_retry_polls` | `10` | status polls in a row that may fail (the status command itself errors) before the session counts as ended; an unreadable status is unknown, never "stopped" |
 | `agent.launch_backoff_seconds` | `60` | seconds to wait before relaunching a failed agent start; doubles each failure up to 15 minutes; each failed start uses one of `max_sessions` |

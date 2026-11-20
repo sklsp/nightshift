@@ -38,6 +38,9 @@ When an agent rewrites a docstring or comment it tends to drop the design reason
 ## Notes files are append-only
 BUGS.md, IDEAS.md and BLOCKED.md only grow. A session that rewrites or shortens one silently loses history; in a real run a bug report disappeared when an agent tidied the file. Add lines, never rewrite.
 
+## A time limit per item
+One stubborn item can eat an entire night: every session restarts on the same dead end and nothing else gets done. `agent.item_minutes` caps it; when the same item has been next for that many minutes without a commit, the supervisor appends BLOCKED to its line in the progress file, stops the agent once, and the run moves on to the next item. The clock restarts whenever the next item changes, so steady progress never hits it, and 0 keeps the old behaviour.
+
 ## The machine can fail, not only the agent
 In Sparton run 13 the machine itself failed late in the night: Windows refused to start new processes for a while, and every process creation came back with exit code 3221225794 (0xC0000142, STATUS_DLL_INIT_FAILED). The agent launch failed and so did the status command, so the supervisor saw three sessions that never started, counted them as empty, and gave up with a false "agent stuck" although nothing was wrong with the agent. Two rules came from it: an unreadable status is unknown, not stopped (the supervisor keeps polling instead of ending the session), and a failed launch is retried after a backoff that doubles each time; it never counts as an empty session, and only six consecutive failed starts end the run.
 
