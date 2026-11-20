@@ -80,7 +80,7 @@ _ITEMS_SKELETON = """\
 TODO: describe this item
 """
 
-_RUN_KEY_LINE = re.compile(r"^(name|branch|templates)\s*=\s*(.+)$")
+_RUN_KEY_LINE = re.compile(r"^(name|branch|base|templates)\s*=\s*(.+)$")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -99,6 +99,7 @@ def build_parser() -> argparse.ArgumentParser:
     init_parser.add_argument("--from", dest="from_dir", type=Path, default=None, metavar="OLD_RUN_DIR")
     init_parser.add_argument("--name", default=None, help="new name for the copied run (default: old name)")
     init_parser.add_argument("--branch", default=None, help="set branch in the copied run.toml")
+    init_parser.add_argument("--base", default=None, help="set base in the copied run.toml")
 
     build_parser = subparsers.add_parser("build", help="render the spec files into the run directory")
     build_parser.add_argument("run_dir", type=Path, help="path of an existing run directory")
@@ -178,7 +179,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     if args.command == "init":
-        return _init(args.run_dir, from_dir=args.from_dir, name=args.name, branch=args.branch)
+        return _init(args.run_dir, from_dir=args.from_dir, name=args.name, branch=args.branch, base=args.base)
     if args.command == "build":
         return _build(args.run_dir)
     if args.command == "supervise":
@@ -207,7 +208,13 @@ def main(argv: list[str] | None = None) -> int:
     return 2
 
 
-def _init(run_dir: Path, from_dir: Path | None = None, name: str | None = None, branch: str | None = None) -> int:
+def _init(
+    run_dir: Path,
+    from_dir: Path | None = None,
+    name: str | None = None,
+    branch: str | None = None,
+    base: str | None = None,
+) -> int:
     """Create a new run directory with example files, or copy the config of an old run."""
     for path in (run_dir / "run.toml", run_dir / "items.md"):
         if path.exists():
@@ -217,8 +224,8 @@ def _init(run_dir: Path, from_dir: Path | None = None, name: str | None = None, 
         print(f"error: {run_dir} is not a directory", file=sys.stderr)
         return 1
     if from_dir is None:
-        if name is not None or branch is not None:
-            print("error: --name and --branch only work with --from", file=sys.stderr)
+        if name is not None or branch is not None or base is not None:
+            print("error: --name, --branch and --base only work with --from", file=sys.stderr)
             return 1
         toml_text = _EXAMPLE_RUN_TOML
         items_text = _EXAMPLE_ITEMS_MD
@@ -227,7 +234,9 @@ def _init(run_dir: Path, from_dir: Path | None = None, name: str | None = None, 
         if not old_toml.is_file():
             print(f"error: {from_dir} has no run.toml", file=sys.stderr)
             return 1
-        toml_text = _rewrite_run_toml(old_toml.read_text(encoding="utf-8"), from_dir, run_dir, name, branch)
+        toml_text = _rewrite_run_toml(
+            old_toml.read_text(encoding="utf-8"), from_dir, run_dir, name, branch, base
+        )
         items_text = _ITEMS_SKELETON
     run_dir.mkdir(parents=True, exist_ok=True)
     toml_path = run_dir / "run.toml"
@@ -239,10 +248,12 @@ def _init(run_dir: Path, from_dir: Path | None = None, name: str | None = None, 
     return 0
 
 
-def _rewrite_run_toml(text: str, from_dir: Path, run_dir: Path, name: str | None, branch: str | None) -> str:
+def _rewrite_run_toml(
+    text: str, from_dir: Path, run_dir: Path, name: str | None, branch: str | None, base: str | None
+) -> str:
     """Copy a run.toml for a fresh run; return the new text.
 
-    Only the [run] name and branch lines change, and only when their flag is given;
+    Only the [run] name, branch and base lines change, and only when their flag is given;
     a relative templates path is re-pointed at the same folder from the new dir;
     every other line stays byte for byte.
     """
@@ -251,7 +262,8 @@ def _rewrite_run_toml(text: str, from_dir: Path, run_dir: Path, name: str | None
     in_run = False
     run_header_index = -1
     name_index = -1
-    branch_seen = False
+    branch_index = -1
+    base_index = -1
     for line in text.splitlines(keepends=True):
         stripped = line.strip()
         if re.match(r"^\[.+\]$", stripped):
@@ -265,17 +277,38 @@ def _rewrite_run_toml(text: str, from_dir: Path, run_dir: Path, name: str | None
         if key == "name":
             name_index = len(out)
             out.append(_replace_value(line, "name", name) if name is not None else line)
-        elif key == "branch":
-            branch_seen = True
-            out.append(_replace_value(line, "branch", branch) if branch is not None else line)
+        elif key in ("branch", "base"):
+            value = branch if key == "branch" else base
+            index = len(out)
+            out.append(_replace_value(line, key, value) if value is not None else line)
+            if key == "branch":
+                branch_index = index
+            else:
+                base_index = index
         elif key == "templates":
             out.append(_rewrite_templates_line(line, from_dir, run_dir))
         else:
             out.append(line)
-    if branch is not None and not branch_seen:
-        at = name_index + 1 if name_index >= 0 else run_header_index + 1 if run_header_index >= 0 else len(out)
-        out.insert(at, f'branch = "{branch}"{newline}')
+    anchor = name_index if name_index >= 0 else run_header_index
+    branch_index = _ensure_run_key(out, "branch", branch, newline, branch_index, anchor)
+    base_anchor = branch_index if branch_index >= 0 else anchor
+    _ensure_run_key(out, "base", base, newline, base_index, base_anchor)
     return "".join(out)
+
+
+def _ensure_run_key(
+    out: list[str], key: str, value: str | None, newline: str, seen_index: int, anchor_index: int
+) -> int:
+    """Make sure the [run] block holds a `key = "value"` line; return its index in out.
+
+    A line already present was replaced in place by the caller and is only reported here;
+    a missing one is inserted after the anchor line, or at the end when there is no anchor.
+    """
+    if value is None or seen_index >= 0:
+        return seen_index
+    at = anchor_index + 1 if anchor_index >= 0 else len(out)
+    out.insert(at, f'{key} = "{value}"{newline}')
+    return at
 
 
 def _replace_value(line: str, key: str, value: str) -> str:

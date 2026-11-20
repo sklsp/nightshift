@@ -62,7 +62,7 @@ Python 3.11 or newer; no other dependencies. This puts `nightshift` on your PATH
    nightshift init myrun --from old-run
    ```
 
-   This writes `myrun/run.toml` (every key shown, commented) and an example `myrun/items.md`; with `--from`, it copies the old run's two files instead, rewriting only name and branch when you pass --name or --branch, and starts items.md as an empty skeleton.
+   This writes `myrun/run.toml` (every key shown, commented) and an example `myrun/items.md`; with `--from`, it copies the old run's two files instead, rewriting only name, branch and base when you pass --name, --branch or --base, and starts items.md as an empty skeleton.
 2. Edit the two files: point `repo` at your repo, set the test command in `[check]`, then write one item per section in items.md (`## title` plus a body).
 3. Check that config, items, repo and test program are ready before starting:
 

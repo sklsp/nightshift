@@ -324,6 +324,42 @@ def test_init_from_adds_missing_branch_after_name(tmp_path: Path) -> None:
     assert lines[name_at + 1] == 'branch = "main"'
 
 
+def test_init_from_replaces_base_keeps_comments(tmp_path: Path) -> None:
+    old = tmp_path / "old-run"
+    old.mkdir()
+    (old / "run.toml").write_text(
+        "[run]\n"
+        'name = "old"\n'
+        'branch = "feature-old"\n'
+        'base = "origin/old-main"  # keep me out of main\n'
+        '[check]\ntest = ["pytest"]\n',
+        encoding="utf-8",
+    )
+    new_dir = tmp_path / "new-run"
+    assert main(["init", str(new_dir), "--from", str(old), "--base", "origin/main"]) == 0
+    expected = (
+        "[run]\n"
+        'name = "old"\n'
+        'branch = "feature-old"\n'
+        'base = "origin/main"  # keep me out of main\n'
+        '[check]\ntest = ["pytest"]\n'
+    )
+    assert (new_dir / "run.toml").read_text(encoding="utf-8") == expected
+
+
+def test_init_from_adds_missing_base_after_branch(tmp_path: Path) -> None:
+    old = tmp_path / "old-run"
+    old.mkdir()
+    (old / "run.toml").write_text(
+        '[run]\nname = "old"\nbranch = "feature-old"\nrepo = ".."\n[check]\ntest = ["pytest"]\n', encoding="utf-8"
+    )
+    new_dir = tmp_path / "new-run"
+    assert main(["init", str(new_dir), "--from", str(old), "--base", "origin/main"]) == 0
+    lines = (new_dir / "run.toml").read_text(encoding="utf-8").splitlines()
+    branch_at = next(i for i, line in enumerate(lines) if line.startswith("branch"))
+    assert lines[branch_at + 1] == 'base = "origin/main"'
+
+
 def test_init_from_rewrites_relative_templates_for_non_sibling(tmp_path: Path) -> None:
     templates = tmp_path / "shared" / "templates"
     templates.mkdir(parents=True)
@@ -379,6 +415,12 @@ def test_init_from_missing_old_config_errors(tmp_path: Path, capsys: pytest.Capt
 
 def test_init_name_without_from_errors(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["init", str(tmp_path / "new"), "--name", "x"]) == 1
+    err = capsys.readouterr().err
+    assert "error:" in err and "only work with --from" in err
+
+
+def test_init_base_without_from_errors(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["init", str(tmp_path / "new"), "--base", "origin/main"]) == 1
     err = capsys.readouterr().err
     assert "error:" in err and "only work with --from" in err
 
