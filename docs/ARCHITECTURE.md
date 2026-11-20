@@ -40,7 +40,7 @@ sequenceDiagram
 
 | file | what it does |
 | --- | --- |
-| `src/nightshift/cli.py` | Command line interface: builds the argparse tree for init, build, supervise, queue, status, watch, doctor, report, history, commits, review and gate (`build_parser`, `main`) and dispatches to the other modules. |
+| `src/nightshift/cli.py` | Command line interface: builds the argparse tree for init, build, supervise, queue, status, watch, doctor, report, history, commits, review, finish and gate (`build_parser`, `main`) and dispatches to the other modules. |
 | `src/nightshift/config.py` | Loads and validates run.toml into a frozen `RunConfig`; unknown keys, wrong types or missing required values raise `ConfigError`. |
 | `src/nightshift/items.py` | Splits items.md at its `## ` headings into numbered `Item`s; empty titles, duplicate titles or empty bodies raise `ItemsError`. |
 | `src/nightshift/render.py` | Renders 00-start.md, one item file per item and checklist.txt from templates (`render_run`); raises `RenderError` when a rendered file fails the text check. |
@@ -56,6 +56,7 @@ sequenceDiagram
 | `src/nightshift/commits.py` | Checks that the history has exactly one well-formed commit per item since base; reports bad subjects, empty bodies and missing or doubled items (`commit_report`). |
 | `src/nightshift/git.py` | Small helpers around git: `run_git`, `current_branch`, `git_dir`, `fingerprint` (HEAD plus status text) and `commit_log`. |
 | `src/nightshift/progress.py` | Reads PROGRESS-<name>.md into a `Progress` with done, blocked and next item; an unticked line ending in BLOCKED counts as resolved. |
+| `src/nightshift/finish.py` | Drops PROGRESS-<name>.md once every item is done or blocked: refuses while a live supervisor holds the repo lock, when items are still open, on uncommitted tracked changes or on the wrong branch, then commits the removal (`run_finish`). |
 
 ## The supervisor's rules and why each exists
 

@@ -141,6 +141,27 @@ def _release_lock(lock_path: Path) -> None:
         lock_path.unlink()
 
 
+def supervisor_lock_held(
+    repo: Path,
+    *,
+    alive: Callable[[int], bool] = _pid_alive,
+    git_dir: Callable[[Path], Path | None] = git.git_dir,
+) -> bool:
+    """Return True when a live supervisor holds the lock in repo's git dir.
+
+    A missing or unreadable lock counts as not held; supervise treats such a lock as stale and takes it over.
+    """
+    path = _lock_path(repo, git_dir)
+    if path is None or not path.is_file():
+        return False
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        pid = int(data["pid"])
+    except (OSError, TypeError, ValueError, KeyError):
+        return False
+    return alive(pid)
+
+
 def read_supervisor_events(run_dir: Path) -> list[dict[str, str]]:
     """Return every supervisor event from .gate/supervise.jsonl as {t, msg}, skipping bad lines."""
     path = run_dir / ".gate" / "supervise.jsonl"

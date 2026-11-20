@@ -13,6 +13,7 @@ from nightshift import __version__
 from nightshift.agent import AgentError
 from nightshift.commits import CommitError, commit_report
 from nightshift.config import ConfigError, RunConfig, load_config
+from nightshift.finish import run_finish
 from nightshift.gate import clean, file, last_gate_line, start, state, wait
 from nightshift.git import run_git
 from nightshift.history import history_lines
@@ -144,6 +145,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     review_parser.add_argument("run_dir", type=Path, help="path of an existing run directory")
 
+    finish_parser = subparsers.add_parser(
+        "finish", help="drop the progress file once every item is done or blocked"
+    )
+    finish_parser.add_argument("run_dir", type=Path, help="path of an existing run directory")
+
     gate_parser = subparsers.add_parser("gate", help="run a check behind the detached gate")
     gate_sub = gate_parser.add_subparsers(dest="gate_command", required=True)
     gate_start = gate_sub.add_parser("start", help="run lint and pre checks, then start the test command detached")
@@ -193,6 +199,8 @@ def main(argv: list[str] | None = None) -> int:
         return _commits(args.run_dir, base=args.base)
     if args.command == "review":
         return _review(args.run_dir)
+    if args.command == "finish":
+        return _finish(args.run_dir)
     if args.command == "gate":
         return _gate(args)
     parser.print_help()
@@ -502,6 +510,16 @@ def _review(run_dir: Path) -> int:
         return 1
     sys.stdout.write(text)
     return 0
+
+
+def _finish(run_dir: Path) -> int:
+    """Load config and drop the progress file once every item is done or blocked."""
+    try:
+        config = load_config(run_dir)
+    except ConfigError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    return run_finish(config)
 
 
 def _gate(args: argparse.Namespace) -> int:
