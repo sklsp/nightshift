@@ -11,7 +11,7 @@ from pathlib import Path
 import nightshift.agent as agent_module
 from nightshift.cli import main
 from nightshift.config import RunConfig
-from nightshift.supervise import _pid_alive, supervise
+from nightshift.supervise import _pid_alive, mark_item_blocked, supervise
 
 
 class Clock:
@@ -52,6 +52,7 @@ def _setup(
     max_sessions: int,
     *,
     idle_minutes=60,
+    item_minutes=0,
     stop=None,
     launch_backoff_seconds=60,
     max_launch_failures=6,
@@ -72,6 +73,7 @@ def _setup(
         status=["fake-status"],
         max_sessions=max_sessions,
         idle_minutes=idle_minutes,
+        item_minutes=item_minutes,
         stop=list(stop or []),
         launch_backoff_seconds=launch_backoff_seconds,
         max_launch_failures=max_launch_failures,
@@ -1042,3 +1044,176 @@ def test_an_item_ticked_before_its_commit_is_recorded_once_the_commit_lands(tmp_
     assert code == 0
     first = [line for line in logs if line.startswith(f"item {config.prefix}1 committed")]
     assert first == [f"item {config.prefix}1 committed {hashes['1'][0]} at {hashes['1'][1]}"]
+
+
+def test_no_item_limit_when_zero(tmp_path: Path, monkeypatch) -> None:
+    config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=2)
+    clock = Clock()
+    calls = {"n": 0}
+
+    def fake_is_running(cfg: RunConfig, quiet: bool = False) -> bool:
+        # The agent runs far longer than any limit would allow.
+        calls["n"] += 1
+        return calls["n"] <= 8
+
+    monkeypatch.setattr(agent_module, "is_running", fake_is_running)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
+    stops: list[RunConfig] = []
+    monkeypatch.setattr(agent_module, "stop", lambda cfg: stops.append(cfg))
+
+    logs: list[str] = []
+    code = supervise(
+        config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append,
+        fingerprint=no_fingerprint, git_dir=no_git_dir
+    )
+
+    assert code == 1
+    progress_text = (config.repo / "PROGRESS-sup.md").read_text(encoding="utf-8")
+    assert "BLOCKED" not in progress_text
+    assert not any("blocked by the supervisor" in line for line in logs)
+    assert stops == []
+
+
+def test_item_past_the_limit_gets_blocked_and_logged(tmp_path: Path, monkeypatch) -> None:
+    config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=3, item_minutes=1)
+    clock = Clock()
+    calls = {"n": 0}
+
+    def fake_is_running(cfg: RunConfig, quiet: bool = False) -> bool:
+        # The agent keeps working on the first item until it has been next for a full minute.
+        calls["n"] += 1
+        return calls["n"] <= 5
+
+    monkeypatch.setattr(agent_module, "is_running", fake_is_running)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
+    stops: list[RunConfig] = []
+    monkeypatch.setattr(agent_module, "stop", lambda cfg: stops.append(cfg))
+
+    logs: list[str] = []
+    code = supervise(
+        config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append,
+        fingerprint=no_fingerprint, git_dir=no_git_dir
+    )
+
+    assert code == 1
+    lines = (config.repo / "PROGRESS-sup.md").read_text(encoding="utf-8").splitlines()
+    assert "- [ ] T1. first item BLOCKED" in lines
+    assert "- [ ] T2. second item" in lines
+    assert logs.count("item T1 blocked by the supervisor after 1 minutes") == 1
+
+
+def test_item_clock_resets_when_the_next_item_changes(tmp_path: Path, monkeypatch) -> None:
+    config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=1, item_minutes=1)
+    clock = Clock()
+    calls = {"n": 0}
+
+    def fake_is_running(cfg: RunConfig, quiet: bool = False) -> bool:
+        # The first item is ticked mid-session; by the third poll a full minute has passed since
+        # the run started, but only half of it on the second item. Without the reset the second
+        # item would be blocked here.
+        calls["n"] += 1
+        if calls["n"] == 4:
+            (cfg.repo / "PROGRESS-sup.md").write_text(_PARTIAL_TICKED, encoding="utf-8")
+        return calls["n"] <= 5
+
+    monkeypatch.setattr(agent_module, "is_running", fake_is_running)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
+    stops: list[RunConfig] = []
+    monkeypatch.setattr(agent_module, "stop", lambda cfg: stops.append(cfg))
+
+    logs: list[str] = []
+    code = supervise(
+        config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append,
+        fingerprint=no_fingerprint, git_dir=no_git_dir
+    )
+
+    assert code == 1
+    progress_text = (config.repo / "PROGRESS-sup.md").read_text(encoding="utf-8")
+    assert "BLOCKED" not in progress_text
+    assert not any("blocked by the supervisor" in line for line in logs)
+    assert stops == []
+
+
+def test_mark_item_blocked_appends_the_marker_once(tmp_path: Path) -> None:
+    progress_file = tmp_path / "PROGRESS-T.md"
+    progress_file.write_text(_UNTICKED, encoding="utf-8")
+    mark_item_blocked(progress_file, "T", 1)
+    lines = progress_file.read_text(encoding="utf-8").splitlines()
+    assert "- [ ] T1. first item BLOCKED" in lines
+    assert "- [ ] T2. second item" in lines
+    # A second call must not double-mark the line.
+    mark_item_blocked(progress_file, "T", 1)
+    assert progress_file.read_text(encoding="utf-8").splitlines() == lines
+
+
+
+
+def test_already_blocked_item_is_not_stopped_again(tmp_path: Path, monkeypatch) -> None:
+    progress = "- [ ] T1. first item BLOCKED\n- [ ] T2. second item\n"
+    config, run_dir = _setup(tmp_path, progress, max_sessions=5, item_minutes=1)
+    clock = Clock()
+    calls = {"n": 0}
+
+    def fake_is_running(cfg: RunConfig, quiet: bool = False) -> bool:
+        # The agent works on the second item until it has been next for a full minute.
+        calls["n"] += 1
+        return calls["n"] <= 5
+
+    monkeypatch.setattr(agent_module, "is_running", fake_is_running)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
+    stops: list[RunConfig] = []
+    monkeypatch.setattr(agent_module, "stop", lambda cfg: stops.append(cfg))
+
+    logs: list[str] = []
+    code = supervise(
+        config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append,
+        fingerprint=no_fingerprint, git_dir=no_git_dir
+    )
+
+    # Both items are resolved (one pre-blocked, one blocked by the supervisor), so the run ends.
+    assert code == 0
+    lines = (config.repo / "PROGRESS-sup.md").read_text(encoding="utf-8").splitlines()
+    assert "- [ ] T1. first item BLOCKED" in lines
+    assert "- [ ] T2. second item BLOCKED" in lines
+    # Only the second item was blocked by the supervisor; the pre-blocked one is not touched.
+    assert logs.count("item T2 blocked by the supervisor after 1 minutes") == 1
+    assert len(stops) == 1
+
+    assert len(stops) == 1
+
+
+
+
+def test_a_done_item_is_never_blocked(tmp_path: Path, monkeypatch) -> None:
+    config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5, item_minutes=1)
+    clock = Clock()
+    calls = {"n": 0}
+
+    def fake_is_running(cfg: RunConfig, quiet: bool = False) -> bool:
+        # The first item is ticked mid-session; the agent then stalls on the second one until it
+        # passes the limit. More than a minute has passed since the run started when that happens.
+        calls["n"] += 1
+        if calls["n"] == 4:
+            (cfg.repo / "PROGRESS-sup.md").write_text(_PARTIAL_TICKED, encoding="utf-8")
+        return calls["n"] <= 6
+
+    monkeypatch.setattr(agent_module, "is_running", fake_is_running)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
+    stops: list[RunConfig] = []
+    monkeypatch.setattr(agent_module, "stop", lambda cfg: stops.append(cfg))
+
+    logs: list[str] = []
+    code = supervise(
+        config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append,
+        fingerprint=no_fingerprint, git_dir=no_git_dir
+    )
+
+    # The second item is blocked and both items are resolved, so the run ends. Only the current
+    # item carries the marker; the done first item keeps its line exactly as it was ticked.
+    assert code == 0
+    lines = (config.repo / "PROGRESS-sup.md").read_text(encoding="utf-8").splitlines()
+    assert "- [x] T1. first item (1 passed in 0.01s)" in lines
+    assert "- [ ] T2. second item BLOCKED" in lines
+    assert logs.count("item T2 blocked by the supervisor after 1 minutes") == 1
+    assert len(stops) == 1
+

@@ -21,6 +21,7 @@ import contextlib
 import ctypes
 import json
 import os
+import re
 import shutil
 import sys
 import time
@@ -71,6 +72,21 @@ def read_run_progress(progress_file: Path, prefix: str, run_dir: Path, log: Call
         log("repo progress file missing; reading the .gate copy")
         return read_progress(fallback, prefix)
     return read_progress(progress_file, prefix)
+
+
+def mark_item_blocked(progress_file: Path, prefix: str, number: int) -> None:
+    """Append ' BLOCKED' to one item's unticked line in place, keeping the rest of the line.
+
+    A line that already carries the marker is left alone so an item is never blocked twice.
+    """
+    lines = progress_file.read_text(encoding="utf-8").splitlines()
+    pattern = re.compile(rf"^- \[ \] {re.escape(prefix)}{number}\. .+$")
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        if pattern.match(stripped) and not stripped.endswith(" BLOCKED"):
+            lines[index] = f"{stripped} BLOCKED"
+            break
+    progress_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def _pid_alive(pid: int) -> bool:
@@ -228,6 +244,9 @@ def supervise(
         last_done = 0
         unknown_streak = 0
         recorded_items: set[int] = set()
+        next_item_seen: int | None = None
+        next_since = 0.0
+        blocked_items: set[int] = set()
 
         def _status() -> bool | None:
             """Poll the agent once, at most every poll_seconds; log unknown streak boundaries."""
@@ -252,6 +271,30 @@ def supervise(
         def _status_gave_up() -> bool:
             """True when the unknown streak reached its cap and the session must end."""
             return unknown_streak >= config.status_retry_polls
+
+        def _check_item_limit() -> None:
+            """Block the current item when it has been next for item_minutes without a commit.
+
+            The clock restarts whenever the progress file's next item changes, so an agent that
+            finishes one item gets a fresh window on the next; 0 disables the limit entirely.
+            """
+            nonlocal next_item_seen, next_since
+            if config.item_minutes <= 0:
+                return
+            progress = read_run_progress(progress_path, config.prefix, run_dir, _log_with_events)
+            number = progress.next_item
+            if number != next_item_seen:
+                next_item_seen = number
+                next_since = now()
+            if number is None or number in blocked_items:
+                return
+            if now() - next_since >= config.item_minutes * 60:
+                mark_item_blocked(progress_path, config.prefix, number)
+                blocked_items.add(number)
+                _log_with_events(
+                    f"item {config.prefix}{number} blocked by the supervisor after {config.item_minutes} minutes"
+                )
+                agent.stop(config)
 
         for session in range(1, config.max_sessions + 1):
             if _status_gave_up():
@@ -309,6 +352,7 @@ def supervise(
                         stop_status = _status()
                         if stop_status is False or (stop_status is None and _status_gave_up()):
                             break
+                _check_item_limit()
             progress = read_run_progress(progress_path, config.prefix, run_dir, _log_with_events)
             new_items = [number for number in progress.done if number not in recorded_items]
             if new_items:

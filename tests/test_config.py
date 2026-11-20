@@ -51,6 +51,7 @@ max_sessions = 5
 launch_grace_polls = 2
 status_retry_polls = 7
 idle_minutes = 5
+item_minutes = 9
 stop = ["lms", "stop"]
 """,
     )
@@ -76,6 +77,7 @@ stop = ["lms", "stop"]
     assert cfg.launch_grace_polls == 2
     assert cfg.status_retry_polls == 7
     assert cfg.idle_minutes == 5
+    assert cfg.item_minutes == 9
     assert cfg.stop == ["lms", "stop"]
 
 
@@ -99,6 +101,7 @@ def test_defaults_when_optional_keys_missing(tmp_path: Path) -> None:
     assert cfg.launch_grace_polls == 4
     assert cfg.status_retry_polls == 10
     assert cfg.idle_minutes == 60
+    assert cfg.item_minutes == 0
     assert cfg.stop == []
     assert cfg.launch_backoff_seconds == 60
     assert cfg.max_launch_failures == 6
@@ -284,6 +287,18 @@ def test_max_launch_failures_zero_is_rejected(tmp_path: Path) -> None:
     _write(tmp_path, MINIMAL + "\n[agent]\nmax_launch_failures = 0\n")
     with pytest.raises(ConfigError, match="invalid value for 'agent.max_launch_failures'"):
         load_config(tmp_path)
+
+
+def test_negative_item_minutes_is_rejected(tmp_path: Path) -> None:
+    _write(tmp_path, MINIMAL + "\n[agent]\nitem_minutes = -1\n")
+    with pytest.raises(ConfigError, match="invalid value for 'agent.item_minutes'"):
+        load_config(tmp_path)
+
+
+def test_item_minutes_zero_is_allowed(tmp_path: Path) -> None:
+    _write(tmp_path, MINIMAL + "\n[agent]\nitem_minutes = 0\n")
+    cfg = load_config(tmp_path)
+    assert cfg.item_minutes == 0
 
 
 def test_launch_ok_codes_list_is_parsed(tmp_path: Path) -> None:
