@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+## [0.22.0] - 2026-11-21
+
+- docs: LESSONS.md gets an "A stuck Cline session" section with the ordered recovery steps for a session stuck on an oversized context; README points at it from the Cline note
 - typing: mypy strict now covers tests/ too ([tool.mypy] files = ["src", "tests"]); every test function, fake and fixture is annotated, and setuptools.* ignores missing stubs
 - lint: ruff select gains PTH and RUF; every finding is fixed by hand with behaviour unchanged (Path methods for os calls, raw match= patterns with escaped metacharacters, underscore-prefixed unused unpacks)
 - lint: ruff select gains RET and PERF; the seven findings are fixed by hand with behaviour unchanged, one loop keeps a noqa where it reads better
