@@ -25,13 +25,13 @@ run time: 3 min (first to last item commit)
 
 ## Track record
 
-`nightshift history` over eleven unattended runs on another project (Iris) prints one row per run plus this total line:
+`nightshift history` over forty-eight unattended runs on three projects (Iris, Sparton and nightshift itself) prints one row per run plus this total line:
 
 ```
-11 runs, 24/24 items, -, 12 sessions, 0 warnings
+48 runs, 104/104 items, 27 h 4 min, 58 sessions, 7 warnings
 ```
 
-All twenty-four items were committed in twelve agent sessions with zero review warnings, and every commit was reviewed (by Claude, as described under "How this was built") before it was merged.
+The forty-eight runs are twenty-five on Iris (the night-qwen dirs), fifteen on Sparton (the sparton-quality dirs) and eight on nightshift itself; all one hundred four items were committed in fifty-eight agent sessions with seven review warnings, and every commit was reviewed (by Claude, as described under "How this was built") before it was merged. Runs from before nightshift had a supervisor log are not counted: Iris runs 1 through 63, Sparton runs 1 through 13 and nightshift runs 1 through 26.
 
 docs/ARCHITECTURE.md explains how nightshift works inside: the life of a run, every module and the supervisor's rules.
 The suite includes an end to end test that drives a fake agent through a real run: supervise launches it as a subprocess and watches it commit every item until the progress file is fully ticked.

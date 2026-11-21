@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- git: run_git decodes git output as UTF-8 with errors="replace", so file contents and commit messages no longer depend on the locale code page
+- docs: README Track record now totals today's forty-eight runs across Iris, Sparton and nightshift itself (48 runs, 104/104 items, 27 h 4 min, 58 sessions, 7 warnings) and names the pre-supervisor-log runs that are not counted
+
 ## [0.22.0] - 2026-11-21
 
 - docs: LESSONS.md gets an "A stuck Cline session" section with the ordered recovery steps for a session stuck on an oversized context; README points at it from the Cline note
