@@ -14,7 +14,17 @@ def run_git(repo: Path, *args: str, timeout: float = GIT_TIMEOUT_SECONDS) -> sub
     """
     command = ["git", "-C", str(repo), *args]
     try:
-        return subprocess.run(command, capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=timeout)
+        # git always prints UTF-8; the locale code page must not decide (cp1252 on Windows raised on file
+        # contents and commit messages it cannot map)
+        return subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            stdin=subprocess.DEVNULL,
+            timeout=timeout,
+        )
     except subprocess.TimeoutExpired:
         return subprocess.CompletedProcess(command, 124, "", f"git timed out after {timeout} s")
 

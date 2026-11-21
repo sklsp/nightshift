@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from nightshift.git import commit_log, current_branch, fingerprint, git_dir
+from nightshift.git import commit_log, current_branch, fingerprint, git_dir, run_git
 
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="git not on PATH")
 
@@ -73,8 +73,6 @@ def test_commit_log_keeps_a_commit_with_an_empty_subject(tmp_path: Path, git_tem
 def test_a_git_that_hangs_counts_as_failed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     import subprocess
 
-    from nightshift.git import run_git
-
     def hang(*args, **kwargs):  # type: ignore[no-untyped-def]
         raise subprocess.TimeoutExpired(cmd=args[0], timeout=kwargs["timeout"])
 
@@ -83,3 +81,52 @@ def test_a_git_that_hangs_counts_as_failed(tmp_path: Path, monkeypatch: pytest.M
     assert result.returncode == 124
     assert result.stderr == "git timed out after 0.5 s"
     assert fingerprint(tmp_path) is None
+
+
+def test_run_git_returns_text_for_bytes_the_locale_cannot_decode(tmp_path: Path, git_template: Path) -> None:
+    repo = _make_repo(tmp_path, git_template)
+    # a Dutch word plus an emoji written as UTF-8, with U+0081 (C2 81 in UTF-8): byte 0x81 does not exist in
+    # cp1252, so a locale that decodes git output with cp1252 raises instead of returning text
+    content = "sneeuw \U0001F600\u0081\n"
+    (repo / "utf8.txt").write_bytes(content.encode("utf-8"))
+    _git(repo, "add", "utf8.txt")
+    _git(repo, "commit", "-q", "-m", "M2: add a file with utf-8 bytes cp1252 cannot decode")
+
+    result = run_git(repo, "show", "HEAD:utf8.txt")
+
+    assert result.returncode == 0
+    assert isinstance(result.stdout, str)
+    assert result.stdout == content
+
+
+def test_review_counts_tests_in_a_file_with_bytes_the_locale_cannot_decode(
+    tmp_path: Path, git_template: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from nightshift.cli import main
+
+    repo = _make_repo(tmp_path, git_template)
+    # the test file holds U+0081 (C2 81 in UTF-8), a byte cp1252 cannot decode; review's counting reads it
+    # back with `git show` and must count its tests instead of raising
+    content = "sneeuw \U0001F600\u0081\n\ndef test_one():\n    pass\n\n\ndef test_two():\n    pass\n"
+    (repo / "tests").mkdir()
+    (repo / "tests" / "test_utf8.py").write_bytes(content.encode("utf-8"))
+    _git(repo, "add", "tests/test_utf8.py")
+    _git(repo, "commit", "-q", "-m", "Q1: first item", "-m", "2 passed in 0.1s")
+
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    (run_dir / "run.toml").write_text(
+        f'[run]\nname = "utf8"\nrepo = "{repo.as_posix()}"\nprefix = "Q"\n[check]\ntest = []\n', encoding="utf-8"
+    )
+    (run_dir / "items.md").write_text("# Items\n\n## first item\nDo the thing.\n", encoding="utf-8")
+
+    code = main(["review", str(run_dir)])
+
+    out = capsys.readouterr().out
+    commit_hash = _git(repo, "rev-parse", "--short", "HEAD")
+    assert code == 0
+    assert out == (
+        f"Q1 first item ({commit_hash})\n"
+        "  files: 1 (+8 -0)  tests/test_utf8.py\n"
+        "  tests: 0 -> 2\n"
+    )
