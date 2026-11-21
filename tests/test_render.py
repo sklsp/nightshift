@@ -226,7 +226,7 @@ def test_tick_line_uses_real_prefix(tmp_path: Path) -> None:
 
 def test_render_run_refuses_item_body_with_dash(tmp_path: Path) -> None:
     items = [Item(number=1, title="first item", body="bad \u2014 dash")]
-    with pytest.raises(RenderError, match="fix items.md") as excinfo:
+    with pytest.raises(RenderError, match=r"fix items\.md") as excinfo:
         render_run(_config(tmp_path), items, tmp_path / "out")
     message = str(excinfo.value)
     assert "item-01.md" in message
@@ -408,5 +408,5 @@ def test_config_templates_key_wrong_type_is_rejected(tmp_path: Path) -> None:
         tmp_path,
         '[run]\nname = "demo"\nrepo = "."\ntemplates = 5\n\n[check]\ntest = ["pytest", "-q"]\n',
     )
-    with pytest.raises(ConfigError, match="wrong type for 'run.templates': expected str"):
+    with pytest.raises(ConfigError, match=r"wrong type for 'run\.templates': expected str"):
         load_config(tmp_path)

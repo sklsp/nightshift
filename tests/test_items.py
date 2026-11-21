@@ -92,5 +92,5 @@ def test_load_items_reads_file(tmp_path: Path) -> None:
 
 
 def test_load_items_missing_file(tmp_path: Path) -> None:
-    with pytest.raises(ItemsError, match="missing items.md"):
+    with pytest.raises(ItemsError, match=r"missing items\.md"):
         load_items(tmp_path)

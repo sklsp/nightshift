@@ -32,7 +32,7 @@ def _healthy_run(tmp_path: Path) -> Path:
     run_dir.mkdir()
     (run_dir / "run.toml").write_text(
         f'[run]\nname = "doc"\nrepo = "{repo.as_posix()}"\n[check]\n'
-        f"test = {repr(_test_words())}\nwait_seconds = 25\ntimeout_hint_seconds = 30\n",
+        f"test = {_test_words()!r}\nwait_seconds = 25\ntimeout_hint_seconds = 30\n",
         encoding="utf-8",
     )
     (run_dir / "items.md").write_text("# Items for the doc run\n\n## one item\nDo the thing.\n", encoding="utf-8")

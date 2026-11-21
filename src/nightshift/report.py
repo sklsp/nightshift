@@ -177,7 +177,7 @@ def _review_section(config: RunConfig, items: list[Item], commits: list[tuple[st
     body = [f"- {marker}: {warning}" for marker, warning in review_warnings(config, items, commits)]
     if not body:
         body.append("- no warnings")
-    return ["", "## Review"] + body
+    return ["", "## Review", *body]
 
 
 def _event_count(events: list[dict[str, str]], prefix: str) -> int:

@@ -156,7 +156,7 @@ def test_report_uses_recorded_item_commit_when_git_range_misses_it(
 
 
 def test_report_without_commits_says_not_committed(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    repo, run_dir = _run_dir(
+    _repo, run_dir = _run_dir(
         tmp_path,
         "# Items for the rep run\n\n## first item\nDo it.\n\n## second item\nDo that.\n",
         "- [ ] T1. first item\n- [ ] T2. second item\n",
@@ -175,7 +175,7 @@ def test_report_without_commits_says_not_committed(tmp_path: Path, capsys: pytes
 
 
 def test_report_out_writes_file_instead_of_stdout(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    repo, run_dir = _run_dir(
+    _repo, run_dir = _run_dir(
         tmp_path,
         "# Items for the rep run\n\n## first item\nDo it.\n",
         "- [x] T1. first item\n",
@@ -193,7 +193,7 @@ def test_report_out_writes_file_instead_of_stdout(tmp_path: Path, capsys: pytest
 
 
 def test_report_includes_last_gate_line(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    repo, run_dir = _run_dir(
+    _repo, run_dir = _run_dir(
         tmp_path,
         "# Items for the rep run\n\n## first item\nDo it.\n",
         "- [x] T1. first item\n",
@@ -216,7 +216,7 @@ def test_report_includes_last_gate_line(tmp_path: Path, capsys: pytest.CaptureFi
 
 
 def test_report_appends_bugs_and_ideas_sections(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    repo, run_dir = _run_dir(
+    _repo, run_dir = _run_dir(
         tmp_path,
         "# Items for the rep run\n\n## first item\nDo it.\n",
         "- [x] T1. first item\n",
@@ -243,7 +243,7 @@ def test_report_appends_bugs_and_ideas_sections(tmp_path: Path, capsys: pytest.C
 
 
 def test_report_empty_notes_files_give_no_sections(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    repo, run_dir = _run_dir(
+    _repo, run_dir = _run_dir(
         tmp_path,
         "# Items for the rep run\n\n## first item\nDo it.\n",
         "- [x] T1. first item\n",
@@ -331,7 +331,7 @@ def test_report_skips_blocked_items_for_durations(tmp_path: Path, capsys: pytest
 
 
 def test_report_supervisor_section_from_mixed_log(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    repo, run_dir = _run_dir(
+    _repo, run_dir = _run_dir(
         tmp_path,
         "# Items for the rep run\n\n## first item\nDo it.\n",
         "- [x] T1. first item\n",
@@ -377,7 +377,7 @@ def test_report_supervisor_section_from_mixed_log(tmp_path: Path, capsys: pytest
 
 
 def test_report_supervisor_plural_labels(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    repo, run_dir = _run_dir(
+    _repo, run_dir = _run_dir(
         tmp_path,
         "# Items for the rep run\n\n## first item\nDo it.\n",
         "- [x] T1. first item\n",
@@ -419,7 +419,7 @@ def test_report_supervisor_plural_labels(tmp_path: Path, capsys: pytest.CaptureF
 
 
 def test_report_without_supervise_log_has_no_section(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    repo, run_dir = _run_dir(
+    _repo, run_dir = _run_dir(
         tmp_path,
         "# Items for the rep run\n\n## first item\nDo it.\n",
         "- [x] T1. first item\n",
@@ -435,7 +435,7 @@ def test_report_without_supervise_log_has_no_section(tmp_path: Path, capsys: pyt
 def test_report_supervise_log_with_only_other_events_gives_no_section(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    repo, run_dir = _run_dir(
+    _repo, run_dir = _run_dir(
         tmp_path,
         "# Items for the rep run\n\n## first item\nDo it.\n",
         "- [x] T1. first item\n",
@@ -477,7 +477,7 @@ def test_report_reads_gate_copy_when_repo_progress_removed(tmp_path: Path, capsy
 
 
 def test_report_without_any_progress_says_missing(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    repo, run_dir = _run_dir(tmp_path, "# Items for the rep run\n\n## first item\nDo it.\n", None)
+    _repo, run_dir = _run_dir(tmp_path, "# Items for the rep run\n\n## first item\nDo it.\n", None)
 
     code = main(["report", str(run_dir)])
 

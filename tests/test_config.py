@@ -123,61 +123,61 @@ def test_absolute_repo_left_alone(tmp_path: Path) -> None:
 
 
 def test_missing_file(tmp_path: Path) -> None:
-    with pytest.raises(ConfigError, match="missing run.toml"):
+    with pytest.raises(ConfigError, match=r"missing run\.toml"):
         load_config(tmp_path)
 
 
 def test_bad_toml_includes_message(tmp_path: Path) -> None:
     _write(tmp_path, "[run]\nname = \n")
-    with pytest.raises(ConfigError, match="invalid TOML in run.toml"):
+    with pytest.raises(ConfigError, match=r"invalid TOML in run\.toml"):
         load_config(tmp_path)
 
 
 def test_missing_required_name(tmp_path: Path) -> None:
     _write(tmp_path, '[run]\nrepo = "."\n\n[check]\ntest = ["x"]')
-    with pytest.raises(ConfigError, match="missing required key 'run.name'"):
+    with pytest.raises(ConfigError, match=r"missing required key 'run\.name'"):
         load_config(tmp_path)
 
 
 def test_missing_required_repo(tmp_path: Path) -> None:
     _write(tmp_path, '[run]\nname = "demo"\n\n[check]\ntest = ["x"]')
-    with pytest.raises(ConfigError, match="missing required key 'run.repo'"):
+    with pytest.raises(ConfigError, match=r"missing required key 'run\.repo'"):
         load_config(tmp_path)
 
 
 def test_missing_required_test(tmp_path: Path) -> None:
     _write(tmp_path, '[run]\nname = "demo"\nrepo = "."\n\n[check]')
-    with pytest.raises(ConfigError, match="missing required key 'check.test'"):
+    with pytest.raises(ConfigError, match=r"missing required key 'check\.test'"):
         load_config(tmp_path)
 
 
 def test_wrong_type_str(tmp_path: Path) -> None:
     _write(tmp_path, '[run]\nname = 5\nrepo = "."\n\n[check]\ntest = ["x"]')
-    with pytest.raises(ConfigError, match="wrong type for 'run.name': expected str"):
+    with pytest.raises(ConfigError, match=r"wrong type for 'run\.name': expected str"):
         load_config(tmp_path)
 
 
 def test_wrong_type_int(tmp_path: Path) -> None:
     _write(tmp_path, MINIMAL.replace('test = ["pytest", "-q"]', 'test = ["x"]\nmin_passed = "3"'))
-    with pytest.raises(ConfigError, match="wrong type for 'check.min_passed': expected int"):
+    with pytest.raises(ConfigError, match=r"wrong type for 'check\.min_passed': expected int"):
         load_config(tmp_path)
 
 
 def test_branch_wrong_type_rejected(tmp_path: Path) -> None:
     _write(tmp_path, MINIMAL.replace('name = "demo"', 'name = "demo"\nbranch = 5'))
-    with pytest.raises(ConfigError, match="wrong type for 'run.branch': expected str"):
+    with pytest.raises(ConfigError, match=r"wrong type for 'run\.branch': expected str"):
         load_config(tmp_path)
 
 
 def test_bool_is_not_an_int(tmp_path: Path) -> None:
     _write(tmp_path, MINIMAL.replace('test = ["pytest", "-q"]', 'test = ["x"]\nwait_seconds = true'))
-    with pytest.raises(ConfigError, match="wrong type for 'check.wait_seconds': expected int"):
+    with pytest.raises(ConfigError, match=r"wrong type for 'check\.wait_seconds': expected int"):
         load_config(tmp_path)
 
 
 def test_wrong_type_list_of_str(tmp_path: Path) -> None:
     _write(tmp_path, '[run]\nname = "demo"\nrepo = "."\n\n[check]\ntest = "pytest"')
-    with pytest.raises(ConfigError, match="wrong type for 'check.test': expected a list of str"):
+    with pytest.raises(ConfigError, match=r"wrong type for 'check\.test': expected a list of str"):
         load_config(tmp_path)
 
 
@@ -186,7 +186,7 @@ def test_pre_flat_list_of_strings_is_rejected(tmp_path: Path) -> None:
         tmp_path,
         '[run]\nname = "demo"\nrepo = "."\n\n[check]\ntest = ["x"]\npre = ["mypy", "--strict"]',
     )
-    with pytest.raises(ConfigError, match="wrong type for 'check.pre\\[0\\]': expected a list of str"):
+    with pytest.raises(ConfigError, match=r"wrong type for 'check\.pre\[0\]': expected a list of str"):
         load_config(tmp_path)
 
 
@@ -195,7 +195,7 @@ def test_pre_entry_with_non_string_part_is_rejected(tmp_path: Path) -> None:
         tmp_path,
         '[run]\nname = "demo"\nrepo = "."\n\n[check]\ntest = ["x"]\npre = [["mypy", 5]]',
     )
-    with pytest.raises(ConfigError, match="wrong type for 'check.pre\\[0\\]': expected a list of str"):
+    with pytest.raises(ConfigError, match=r"wrong type for 'check\.pre\[0\]': expected a list of str"):
         load_config(tmp_path)
 
 
@@ -204,55 +204,55 @@ def test_pre_not_a_list_is_rejected(tmp_path: Path) -> None:
         tmp_path,
         '[run]\nname = "demo"\nrepo = "."\n\n[check]\ntest = ["x"]\npre = "mypy"',
     )
-    with pytest.raises(ConfigError, match="wrong type for 'check.pre': expected a list of commands"):
+    with pytest.raises(ConfigError, match=r"wrong type for 'check\.pre': expected a list of commands"):
         load_config(tmp_path)
 
 
 def test_invalid_name_with_space_and_punctuation(tmp_path: Path) -> None:
     _write(tmp_path, '[run]\nname = "bad name!"\nrepo = "."\n\n[check]\ntest = ["x"]')
-    with pytest.raises(ConfigError, match="invalid value for 'run.name'"):
+    with pytest.raises(ConfigError, match=r"invalid value for 'run\.name'"):
         load_config(tmp_path)
 
 
 def test_invalid_prefix_lowercase(tmp_path: Path) -> None:
     _write(tmp_path, '[run]\nname = "demo"\nrepo = "."\nprefix = "ab"\n\n[check]\ntest = ["x"]')
-    with pytest.raises(ConfigError, match="invalid value for 'run.prefix'"):
+    with pytest.raises(ConfigError, match=r"invalid value for 'run\.prefix'"):
         load_config(tmp_path)
 
 
 def test_invalid_prefix_too_long(tmp_path: Path) -> None:
     _write(tmp_path, '[run]\nname = "demo"\nrepo = "."\nprefix = "TOOLONG"\n\n[check]\ntest = ["x"]')
-    with pytest.raises(ConfigError, match="invalid value for 'run.prefix'"):
+    with pytest.raises(ConfigError, match=r"invalid value for 'run\.prefix'"):
         load_config(tmp_path)
 
 
 def test_command_not_a_list_is_rejected(tmp_path: Path) -> None:
     _write(tmp_path, '[run]\nname = "demo"\nrepo = "."\ncommand = "nightshift"\n\n[check]\ntest = ["x"]')
-    with pytest.raises(ConfigError, match="wrong type for 'run.command': expected a list of str"):
+    with pytest.raises(ConfigError, match=r"wrong type for 'run\.command': expected a list of str"):
         load_config(tmp_path)
 
 
 def test_command_with_non_string_part_is_rejected(tmp_path: Path) -> None:
     _write(tmp_path, '[run]\nname = "demo"\nrepo = "."\ncommand = ["nightshift", 5]\n\n[check]\ntest = ["x"]')
-    with pytest.raises(ConfigError, match="wrong type for 'run.command': expected a list of str"):
+    with pytest.raises(ConfigError, match=r"wrong type for 'run\.command': expected a list of str"):
         load_config(tmp_path)
 
 
 def test_command_empty_list_is_rejected(tmp_path: Path) -> None:
     _write(tmp_path, '[run]\nname = "demo"\nrepo = "."\ncommand = []\n\n[check]\ntest = ["x"]')
-    with pytest.raises(ConfigError, match="invalid value for 'run.command'"):
+    with pytest.raises(ConfigError, match=r"invalid value for 'run\.command'"):
         load_config(tmp_path)
 
 
 def test_protect_not_a_list_is_rejected(tmp_path: Path) -> None:
     _write(tmp_path, '[run]\nname = "demo"\nrepo = "."\nprotect = ".github/"\n\n[check]\ntest = ["x"]')
-    with pytest.raises(ConfigError, match="wrong type for 'run.protect': expected a list of str"):
+    with pytest.raises(ConfigError, match=r"wrong type for 'run\.protect': expected a list of str"):
         load_config(tmp_path)
 
 
 def test_protect_with_non_string_is_rejected(tmp_path: Path) -> None:
     _write(tmp_path, '[run]\nname = "demo"\nrepo = "."\nprotect = [".github/", 5]\n\n[check]\ntest = ["x"]')
-    with pytest.raises(ConfigError, match="wrong type for 'run.protect': expected a list of str"):
+    with pytest.raises(ConfigError, match=r"wrong type for 'run\.protect': expected a list of str"):
         load_config(tmp_path)
 
 
@@ -273,25 +273,25 @@ def test_command_prefix_quotes_part_with_space() -> None:
 
 def test_status_retry_polls_zero_is_rejected(tmp_path: Path) -> None:
     _write(tmp_path, MINIMAL + "\n[agent]\nstatus_retry_polls = 0\n")
-    with pytest.raises(ConfigError, match="invalid value for 'agent.status_retry_polls'"):
+    with pytest.raises(ConfigError, match=r"invalid value for 'agent\.status_retry_polls'"):
         load_config(tmp_path)
 
 
 def test_launch_backoff_seconds_zero_is_rejected(tmp_path: Path) -> None:
     _write(tmp_path, MINIMAL + "\n[agent]\nlaunch_backoff_seconds = 0\n")
-    with pytest.raises(ConfigError, match="invalid value for 'agent.launch_backoff_seconds'"):
+    with pytest.raises(ConfigError, match=r"invalid value for 'agent\.launch_backoff_seconds'"):
         load_config(tmp_path)
 
 
 def test_max_launch_failures_zero_is_rejected(tmp_path: Path) -> None:
     _write(tmp_path, MINIMAL + "\n[agent]\nmax_launch_failures = 0\n")
-    with pytest.raises(ConfigError, match="invalid value for 'agent.max_launch_failures'"):
+    with pytest.raises(ConfigError, match=r"invalid value for 'agent\.max_launch_failures'"):
         load_config(tmp_path)
 
 
 def test_negative_item_minutes_is_rejected(tmp_path: Path) -> None:
     _write(tmp_path, MINIMAL + "\n[agent]\nitem_minutes = -1\n")
-    with pytest.raises(ConfigError, match="invalid value for 'agent.item_minutes'"):
+    with pytest.raises(ConfigError, match=r"invalid value for 'agent\.item_minutes'"):
         load_config(tmp_path)
 
 
@@ -309,7 +309,7 @@ def test_launch_ok_codes_list_is_parsed(tmp_path: Path) -> None:
 
 def test_launch_ok_codes_not_a_list_is_rejected(tmp_path: Path) -> None:
     _write(tmp_path, MINIMAL + "\n[agent]\nlaunch_ok_codes = 1\n")
-    with pytest.raises(ConfigError, match="wrong type for 'agent.launch_ok_codes'"):
+    with pytest.raises(ConfigError, match=r"wrong type for 'agent\.launch_ok_codes'"):
         load_config(tmp_path)
 
 
@@ -322,7 +322,7 @@ def test_launch_ok_codes_with_non_integer_is_rejected(tmp_path: Path) -> None:
 launch_ok_codes = [0, "1"]
 """,
     )
-    with pytest.raises(ConfigError, match="wrong type for 'agent.launch_ok_codes'"):
+    with pytest.raises(ConfigError, match=r"wrong type for 'agent\.launch_ok_codes'"):
         load_config(tmp_path)
 
 
@@ -334,7 +334,7 @@ def test_unknown_top_level_key(tmp_path: Path) -> None:
 
 def test_unknown_section_key(tmp_path: Path) -> None:
     _write(tmp_path, '[run]\nname = "demo"\nrepo = "."\nbranchh = "x"\n\n[check]\ntest = ["x"]')
-    with pytest.raises(ConfigError, match="unknown key 'run.branchh'"):
+    with pytest.raises(ConfigError, match=r"unknown key 'run\.branchh'"):
         load_config(tmp_path)
 
 

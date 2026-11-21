@@ -122,7 +122,7 @@ def _launch(config: RunConfig, run_dir: Path, command: list[str], mode_line: str
     _mode_path(run_dir).write_text(f"{mode_line}\n{' '.join(command)}", encoding="utf-8", newline="\n")
     (_gate_dir(run_dir) / _COMMAND_NAME).write_text(command_prefix(config), encoding="utf-8", newline="\n")
 
-    with open(log_path, "wb") as log_file:
+    with log_path.open("wb") as log_file:
         subprocess.Popen(
             [
                 sys.executable,
@@ -372,9 +372,10 @@ def _detach_kwargs() -> dict[str, Any]:
 
 def _run(log_path: Path, done_path: Path, cwd: Path | None, command: list[str]) -> int:
     """Run one test command; its output goes to the inherited log file."""
+    # the gate must always write done
     try:
         code = subprocess.run(command, cwd=cwd, stdin=subprocess.DEVNULL).returncode
-    except Exception as exc:  # noqa: BLE001 - the gate must always write done
+    except Exception as exc:
         print(f"gate could not run {' '.join(command)}: {exc}", file=sys.stderr)
         code = 127
     done_path.write_text(str(code), encoding="utf-8", newline="\n")

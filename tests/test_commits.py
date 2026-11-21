@@ -170,7 +170,7 @@ def test_explicit_base_wins_over_branch(tmp_path: Path, git_template: Path) -> N
     main_sha = _commit(repo, "M1: prep work on main")
     _git(repo, "checkout", "-q", "-b", "work")  # current branch differs from config.branch
     assert root != main_sha
-    config, items = _config_and_items(run_dir)
+    config, _items = _config_and_items(run_dir)
     # without base the merge-base of side and HEAD would be the root commit; base = "main" wins
     assert resolve_base(config) == main_sha
 
@@ -188,7 +188,7 @@ def test_run_branch_without_main_falls_back_to_first_commit(tmp_path: Path, git_
 
 
 def test_bad_base_is_an_error(tmp_path: Path, git_template: Path) -> None:
-    repo, run_dir = _make_run(tmp_path, git_template)
+    _repo, run_dir = _make_run(tmp_path, git_template)
     assert main(["commits", str(run_dir), "--base", "no-such-ref"]) == 1
 
 

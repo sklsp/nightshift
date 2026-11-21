@@ -141,10 +141,10 @@ def test_exit_code_above_int32_prints_hex(tmp_path: Path, capsys: pytest.Capture
 
 
 def test_launch_missing_config_raises(tmp_path: Path) -> None:
-    with pytest.raises(AgentError, match="agent.launch"):
+    with pytest.raises(AgentError, match=r"agent\.launch"):
         launch(_config(tmp_path), "hello")
 
 
 def test_status_missing_config_raises(tmp_path: Path) -> None:
-    with pytest.raises(AgentError, match="agent.status"):
+    with pytest.raises(AgentError, match=r"agent\.status"):
         is_running(_config(tmp_path))

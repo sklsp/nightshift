@@ -144,7 +144,7 @@ def _take_lock(lock_path: Path, run_dir: Path, log: Callable[[str], None], alive
     tmp_path = lock_path.with_name(f"{lock_path.name}.{os.getpid()}.tmp")
     try:
         tmp_path.write_text(payload, encoding="utf-8")
-        os.replace(tmp_path, lock_path)
+        tmp_path.replace(lock_path)
     except OSError:
         tmp_path.unlink(missing_ok=True)
         raise

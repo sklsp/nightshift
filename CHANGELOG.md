@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- lint: ruff select gains PTH and RUF; every finding is fixed by hand with behaviour unchanged (Path methods for os calls, raw match= patterns with escaped metacharacters, underscore-prefixed unused unpacks)
 - lint: ruff select gains RET and PERF; the seven findings are fixed by hand with behaviour unchanged, one loop keeps a noqa where it reads better
 - template: start spec gains a never-push rule next to the never-kill-by-name one (no git push, no new remote branches); docs/LESSONS.md gets a Never push section with what happens when an agent pushes first
 

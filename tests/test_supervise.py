@@ -1,5 +1,6 @@
 """Tests for the supervise loop."""
 
+import itertools
 import json
 import os
 import subprocess
@@ -237,7 +238,7 @@ def test_supervise_never_polls_faster_than_poll_seconds(tmp_path: Path, monkeypa
     )
 
     assert code == 1
-    gaps = [b - a for a, b in zip(times, times[1:], strict=False)]
+    gaps = [b - a for a, b in itertools.pairwise(times)]
     assert all(gap >= config.poll_seconds - 1e-9 for gap in gaps)
 
 
@@ -837,7 +838,7 @@ def test_live_lock_refuses_to_start(tmp_path: Path, monkeypatch) -> None:
     assert code == 2
     # The supervisor must refuse before doing anything else.
     assert not launches
-    assert logs == [f"another supervisor (pid {other_pid}) is running {str(run_dir)}; refusing to start"]
+    assert logs == [f"another supervisor (pid {other_pid}) is running {run_dir!s}; refusing to start"]
 
 
 def test_stale_lock_is_removed_and_taken_over(tmp_path: Path, monkeypatch) -> None:
