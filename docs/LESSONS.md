@@ -52,3 +52,6 @@ A hand-written `while true; do ...; sleep 20` loop to watch an overnight run is 
 
 ## Never kill by name
 On 2026-11-19 an agent in an Iris run cleared its own stuck test runs with `Stop-Process -Name python -Force`, which also killed the nightshift supervisor and watch; it happened three times in that one run. The lock then refused a second supervisor while a leftover child process still held it. Never kill processes by name: stop only a process you started yourself, by the pid you saved when you started it.
+
+## Never push
+An agent that pushes its own branch puts commits on the remote before the operator has reviewed them, and the rebase-and-push the operator does after the run then fails or skips the review. The rule: no `git push` and no new remote branches during a run; the operator reviews, rebases and pushes after it ends.

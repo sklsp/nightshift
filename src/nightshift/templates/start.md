@@ -53,6 +53,7 @@ $protected
 - **Never kill processes by name** (no `Stop-Process -Name python`, `taskkill /IM python.exe`, `pkill python`): that also
   kills the supervisor that keeps this run alive and the user's own programs. Stop only a process you started yourself,
   by the pid you saved when you started it.
+- **Never push** (no `git push`, no new remote branches): the operator reviews, rebases and pushes after the run.
 - **Text:** no em dashes or en dashes anywhere, in code, docs or commit messages. Plain, short English.
 - **Never** run git checkout, switch, branch, merge, rebase, stash, reset, restore, clean or push.
 - **Failures:** if an item fails 3 times, write what you tried to BLOCKED.md in the run directory, undo your

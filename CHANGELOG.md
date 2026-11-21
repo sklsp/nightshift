@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- lint: ruff select gains RET and PERF; the seven findings are fixed by hand with behaviour unchanged, one loop keeps a noqa where it reads better
+- template: start spec gains a never-push rule next to the never-kill-by-name one (no git push, no new remote branches); docs/LESSONS.md gets a Never push section with what happens when an agent pushes first
+
 ## [0.21.0] - 2026-11-20
 
 - supervise: agent.item_minutes caps how long one item may stay next; when it passes without a commit, the supervisor appends BLOCKED to its progress line and stops the agent once so the run moves on
