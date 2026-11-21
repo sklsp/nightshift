@@ -437,6 +437,12 @@ def supervise(
                     f"{progress_path.name}, then stop."
                 )
                 agent.launch(config, commit_message)
+                # give the agent the same grace polls as a normal launch to show up as running, so a
+                # slow start is not mistaken for a session that already ended
+                for _poll in range(config.launch_grace_polls):
+                    grace_status = _status()
+                    if grace_status is True or (grace_status is None and _status_gave_up()):
+                        break
                 while True:
                     status = _status()
                     if status is False or (status is None and _status_gave_up()):

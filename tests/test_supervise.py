@@ -1538,6 +1538,31 @@ def test_finished_dirty_repo_gets_exactly_one_more_session(tmp_path: Path, monke
     ]
 
 
+def test_extra_session_that_starts_slowly_is_waited_for(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config, run_dir = _git_dirty_repo(tmp_path)
+    (config.repo / "one.txt").write_text("changed", encoding="utf-8")  # ticked work left uncommitted
+    clock = Clock()
+    calls = {"n": 0}
+
+    def fake_is_running(cfg: RunConfig, quiet: bool = False) -> bool:
+        calls["n"] += 1
+        if calls["n"] == 3:
+            (cfg.repo / "PROGRESS-sup.md").write_text(_TICKED, encoding="utf-8")
+        if calls["n"] == 6:
+            _git_commit(cfg.repo, "one.txt", "changed", f"{cfg.prefix}1: first item")
+        # poll 5 is the extra session not showing up yet: a slow start, not an ended session
+        return calls["n"] in (2, 3, 6)
+
+    monkeypatch.setattr(agent_module, "is_running", fake_is_running)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
+
+    logs: list[str] = []
+    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+
+    assert code == 0
+    assert "still uncommitted after one more session; a human should look" not in logs
+
+
 def test_still_dirty_after_extra_session_returns_one(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config, run_dir = _git_dirty_repo(tmp_path)
     (config.repo / "one.txt").write_text("changed", encoding="utf-8")  # ticked work left uncommitted
