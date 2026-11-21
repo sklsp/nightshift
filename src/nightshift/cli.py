@@ -23,7 +23,7 @@ from nightshift.render import RenderError, render_run
 from nightshift.report import build_report, format_minutes
 from nightshift.review import build_review
 from nightshift.status import current_item_seconds
-from nightshift.supervise import read_supervisor_events, supervise
+from nightshift.supervise import read_supervisor_events, supervise, supervisor_lock_held, unmark_item_blocked
 from nightshift.watch import watch
 
 _EXAMPLE_RUN_TOML = """\
@@ -117,6 +117,12 @@ def build_parser() -> argparse.ArgumentParser:
     status_parser.add_argument("run_dir", type=Path, help="path of an existing run directory")
     status_parser.add_argument("--json", action="store_true", help="print the summary as one JSON object")
 
+    unblock_parser = subparsers.add_parser(
+        "unblock", help="remove the BLOCKED marker from one item's line in the progress file"
+    )
+    unblock_parser.add_argument("run_dir", type=Path, help="path of an existing run directory")
+    unblock_parser.add_argument("item", help="the item number, or prefix plus number like B1")
+
     watch_parser = subparsers.add_parser("watch", help="print new commits and supervisor events as they appear")
     watch_parser.add_argument("run_dir", type=Path, help="path of an existing run directory")
     watch_parser.add_argument(
@@ -189,6 +195,8 @@ def main(argv: list[str] | None = None) -> int:
         return _queue(args.run_dirs)
     if args.command == "status":
         return _status(args.run_dir, as_json=args.json)
+    if args.command == "unblock":
+        return _unblock(args.run_dir, args.item)
     if args.command == "watch":
         return _watch(args.run_dir, every=args.every, once=args.once)
     if args.command == "doctor":
@@ -698,3 +706,47 @@ def _print_commits(repo: Path) -> None:
         return
     for commit in commits:
         print(f"{commit['hash']} {commit['subject']}")
+
+
+def _unblock(run_dir: Path, item: str) -> int:
+    """Remove ' BLOCKED' from one item's unticked line and print the rewritten line.
+
+    Refusals, in order (each exit 1 with one line): a live supervisor holds the repo lock, the
+    progress file is missing, the item is not on it, or the item is not marked BLOCKED. The item
+    argument is its number or prefix plus number; only the number selects the line.
+    """
+    try:
+        config = load_config(run_dir)
+    except ConfigError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    match = re.match(r"^([A-Za-z]+)?(\d+)$", item)
+    if match is None or not match.group(2):
+        print(f"error: item must be a number or prefix plus number, got '{item}'", file=sys.stderr)
+        return 1
+    number = int(match.group(2))
+    progress_path = config.repo / f"PROGRESS-{config.name}.md"
+    if supervisor_lock_held(config.repo):
+        print("a live supervisor holds the repo lock; refusing to unblock", file=sys.stderr)
+        return 1
+    if not progress_path.is_file():
+        print(f"{progress_path.name} is missing in {config.repo}; nothing to unblock", file=sys.stderr)
+        return 1
+    progress = read_progress(progress_path, config.prefix)
+    if number not in progress.blocked:
+        pattern = re.compile(rf"^- \[( |x|X)\] {re.escape(config.prefix)}{number}\. .+$")
+        on_file = any(
+            pattern.match(line.strip()) for line in progress_path.read_text(encoding="utf-8").splitlines()
+        )
+        if not on_file:
+            print(f"item {config.prefix}{number} is not on {progress_path.name}", file=sys.stderr)
+            return 1
+        print(f"item {config.prefix}{number} is not marked BLOCKED", file=sys.stderr)
+        return 1
+    line = unmark_item_blocked(progress_path, config.prefix, number)
+    if line is None:
+        # read_progress saw the marker but the rewrite found none; report it as not blocked
+        print(f"item {config.prefix}{number} is not marked BLOCKED", file=sys.stderr)
+        return 1
+    print(line)
+    return 0

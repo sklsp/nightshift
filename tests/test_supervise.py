@@ -14,7 +14,14 @@ import pytest
 import nightshift.agent as agent_module
 from nightshift.cli import main
 from nightshift.config import RunConfig
-from nightshift.supervise import _pid_alive, describe_repo_change, mark_item_blocked, supervise, uncommitted_paths
+from nightshift.supervise import (
+    _pid_alive,
+    describe_repo_change,
+    mark_item_blocked,
+    supervise,
+    uncommitted_paths,
+    unmark_item_blocked,
+)
 
 
 class Clock:
@@ -1360,6 +1367,33 @@ def test_mark_item_blocked_appends_the_marker_once(tmp_path: Path) -> None:
     # A second call must not double-mark the line.
     mark_item_blocked(progress_file, "T", 1)
     assert progress_file.read_text(encoding="utf-8").splitlines() == lines
+
+
+def test_unmark_item_blocked_removes_the_marker(tmp_path: Path) -> None:
+    progress_file = tmp_path / "PROGRESS-T.md"
+    progress_file.write_text(_UNTICKED, encoding="utf-8")
+    mark_item_blocked(progress_file, "T", 1)
+    line = unmark_item_blocked(progress_file, "T", 1)
+    assert line == "- [ ] T1. first item"
+    lines = progress_file.read_text(encoding="utf-8").splitlines()
+    assert "- [ ] T1. first item" in lines
+    assert "- [ ] T2. second item" in lines
+
+
+def test_unmark_item_blocked_leaves_an_unmarked_line_alone(tmp_path: Path) -> None:
+    progress_file = tmp_path / "PROGRESS-T.md"
+    progress_file.write_text(_UNTICKED, encoding="utf-8")
+    assert unmark_item_blocked(progress_file, "T", 1) is None
+    # A second call must not change the file either.
+    assert unmark_item_blocked(progress_file, "T", 2) is None
+    assert progress_file.read_text(encoding="utf-8").splitlines() == _UNTICKED.splitlines()
+
+
+def test_unmark_item_blocked_missing_item_returns_none(tmp_path: Path) -> None:
+    progress_file = tmp_path / "PROGRESS-T.md"
+    progress_file.write_text(_UNTICKED, encoding="utf-8")
+    assert unmark_item_blocked(progress_file, "T", 9) is None
+    assert progress_file.read_text(encoding="utf-8").splitlines() == _UNTICKED.splitlines()
 
 
 

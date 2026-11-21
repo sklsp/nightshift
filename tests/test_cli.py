@@ -1,6 +1,7 @@
 """Tests for the nightshift command line interface."""
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -684,3 +685,89 @@ def test_queue_missing_run_dir_stops_before_anything(
     err = capsys.readouterr().err
     assert not ran
     assert f"error: {missing} does not exist or has no run.toml" in err
+
+
+def _unblock_run(tmp_path: Path) -> tuple[Path, Path]:
+    """A git repo plus a run dir whose progress file has one blocked item."""
+    if shutil.which("git") is None:
+        pytest.skip("git not on PATH")
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "a.txt").write_text("x\n", encoding="utf-8")
+    _git(repo, "init", "-q")
+    _git(repo, "add", ".")
+    _git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "base")
+    (repo / "PROGRESS-st.md").write_text(
+        "- [x] N1. first item\n- [ ] N2. second item BLOCKED\n- [ ] N3. third item\n", encoding="utf-8"
+    )
+    run_dir = _make_run(tmp_path, repo)
+    return repo, run_dir
+
+
+def test_unblock_removes_the_marker_and_prints_the_line(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo, run_dir = _unblock_run(tmp_path)
+
+    assert main(["unblock", str(run_dir), "N2"]) == 0
+    out = capsys.readouterr().out.splitlines()
+    assert out == ["- [ ] N2. second item"]
+    lines = (repo / "PROGRESS-st.md").read_text(encoding="utf-8").splitlines()
+    assert "- [ ] N2. second item" in lines
+    assert "- [x] N1. first item" in lines
+    assert "- [ ] N3. third item" in lines
+
+
+def test_unblock_accepts_a_bare_number(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    _repo, run_dir = _unblock_run(tmp_path)
+
+    assert main(["unblock", str(run_dir), "2"]) == 0
+    out = capsys.readouterr().out.splitlines()
+    assert out == ["- [ ] N2. second item"]
+
+
+def test_unblock_refuses_while_a_live_supervisor_holds_the_lock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo, run_dir = _unblock_run(tmp_path)
+    lock_file = repo / ".git" / "nightshift-supervise.lock"
+    lock_file.write_text(json.dumps({"pid": os.getpid(), "run": str(run_dir)}), encoding="utf-8")
+
+    assert main(["unblock", str(run_dir), "N2"]) == 1
+    err = capsys.readouterr().err
+    assert "a live supervisor holds the repo lock; refusing to unblock" in err
+    lines = (repo / "PROGRESS-st.md").read_text(encoding="utf-8").splitlines()
+    assert "- [ ] N2. second item BLOCKED" in lines
+
+
+def test_unblock_missing_progress_file(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    repo, run_dir = _unblock_run(tmp_path)
+    (repo / "PROGRESS-st.md").unlink()
+
+    assert main(["unblock", str(run_dir), "N2"]) == 1
+    err = capsys.readouterr().err
+    assert "PROGRESS-st.md is missing" in err
+
+
+def test_unblock_item_not_on_file(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    _repo, run_dir = _unblock_run(tmp_path)
+
+    assert main(["unblock", str(run_dir), "N9"]) == 1
+    err = capsys.readouterr().err
+    assert "item N9 is not on PROGRESS-st.md" in err
+
+
+def test_unblock_item_not_blocked(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    _repo, run_dir = _unblock_run(tmp_path)
+
+    assert main(["unblock", str(run_dir), "N3"]) == 1
+    err = capsys.readouterr().err
+    assert "item N3 is not marked BLOCKED" in err
+
+
+def test_unblock_bad_item_argument(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    _repo, run_dir = _unblock_run(tmp_path)
+
+    assert main(["unblock", str(run_dir), "nope"]) == 1
+    err = capsys.readouterr().err
+    assert "item must be a number or prefix plus number" in err

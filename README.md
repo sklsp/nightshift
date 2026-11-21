@@ -99,6 +99,8 @@ Python 3.11 or newer; no other dependencies. This puts `nightshift` on your PATH
 
 To run several runs back to back, use `nightshift queue <run dir> [<run dir> ...]`: it first checks that every run dir exists with a run.toml, then supervises them in order and stops at the first non-zero exit code.
 
+When an item is marked BLOCKED by the per-item time limit but you want to retry it instead of leaving it blocked, use `nightshift unblock <run dir> <item>`: it removes the " BLOCKED" marker from that item's unticked line in PROGRESS-<name>.md and prints the rewritten line. It refuses with exit 1 while a live supervisor holds the repo lock, when the progress file is missing, or when the item is not on it or not marked BLOCKED; docs/LESSONS.md has the full stuck-session recovery order.
+
 The supervisor survives a machine that refuses to start processes: an unreadable status is treated as unknown and a failed launch is retried with backoff; see `agent.launch_backoff_seconds` and `agent.max_launch_failures` in the config reference.
 
 The supervisor takes a lock file in the repo's git directory before it starts, so only one supervisor can work on a repo at a time; while another process holds the lock, `supervise` refuses with exit code 2.

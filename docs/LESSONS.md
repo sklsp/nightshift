@@ -63,7 +63,7 @@ A Cline session can get stuck processing an oversized context for hours: the mod
 1. Find the stuck session with `cline history --json --limit 1`, then delete it with `cline history delete --session-id <id>`; deleting the session ends that conversation so no further prompt can land in the same dead context.
 2. Stop the supervisor by its pid (never by process name), if it is still waiting; it can sit in its stuck-session wait indefinitely, a fresh start takes over the stale lock cleanly, and killing by name takes down other processes with it.
 3. Restart the model server so it drops the request: for LM Studio run `lms server stop`, then `lms server start`; the oversized context lives in the server's memory, and only dropping it frees the model to answer a new session.
-4. Remove " BLOCKED" from the item's line in the progress file if item_minutes marked it; the mark records that the time limit was hit, not that the item failed, so the run can retry the same item on its next pass.
+4. Remove " BLOCKED" from the item's line with `nightshift unblock <run dir> <item>` if item_minutes marked it; the mark records that the time limit was hit, not that the item failed, so the run can retry the same item on its next pass.
 5. Run `nightshift supervise <run dir>` again to pick the run up where it left off.
 
 Never kill the Cline hub while doing this: other Cline sessions use it, and stopping it ends them too.

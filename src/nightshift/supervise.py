@@ -91,6 +91,23 @@ def mark_item_blocked(progress_file: Path, prefix: str, number: int) -> None:
     progress_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def unmark_item_blocked(progress_file: Path, prefix: str, number: int) -> str | None:
+    """Remove ' BLOCKED' from one item's unticked line in place and return the rewritten line.
+
+    The inverse of mark_item_blocked: a line without the marker (or no such line at all) is left
+    untouched on disk and returns None, so an unblocked or missing item changes nothing.
+    """
+    lines = progress_file.read_text(encoding="utf-8").splitlines()
+    pattern = re.compile(rf"^- \[ \] {re.escape(prefix)}{number}\. .+$")
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        if pattern.match(stripped) and stripped.endswith(" BLOCKED"):
+            lines[index] = stripped[: -len(" BLOCKED")]
+            progress_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            return lines[index]
+    return None
+
+
 def _pid_alive(pid: int) -> bool:
     """Return True when a process with this pid is running on this machine."""
     if sys.platform == "win32":
