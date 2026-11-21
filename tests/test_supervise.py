@@ -14,7 +14,7 @@ import pytest
 import nightshift.agent as agent_module
 from nightshift.cli import main
 from nightshift.config import RunConfig
-from nightshift.supervise import _pid_alive, describe_repo_change, mark_item_blocked, supervise
+from nightshift.supervise import _pid_alive, describe_repo_change, mark_item_blocked, supervise, uncommitted_paths
 
 
 class Clock:
@@ -1432,4 +1432,166 @@ def test_a_done_item_is_never_blocked(tmp_path: Path, monkeypatch: pytest.Monkey
     assert "- [ ] T2. second item BLOCKED" in lines
     assert logs.count("item T2 blocked by the supervisor after 1 minutes") == 1
     assert len(stops) == 1
+
+
+def _git_dirty_repo(tmp_path: Path) -> tuple[RunConfig, Path]:
+    """A real git repo with one committed tracked file plus a run dir holding two unticked items."""
+    config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5)
+    _git_init(config.repo)
+    _git_commit(config.repo, "one.txt", "one", "chore: start")
+    return config, run_dir
+
+
+def test_uncommitted_paths_lists_modified_tracked_files_only(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git_init(repo)
+    _git_commit(repo, "one.txt", "one", "T1: first item")
+    (repo / "stray.txt").write_text("new", encoding="utf-8")  # untracked: does not count
+    assert uncommitted_paths(repo) == []
+    (repo / "one.txt").write_text("changed", encoding="utf-8")
+    assert uncommitted_paths(repo) == ["one.txt"]
+
+
+def test_uncommitted_paths_skips_ignored_paths_and_non_repos(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git_init(repo)
+    _git_commit(repo, "one.txt", "one", "T1: first item")
+    # The progress file is committed with each item and edited after every one, so it never counts as dirty work.
+    _git_commit(repo, "PROGRESS-sup.md", "- [ ] T1. first item\n", "T2: tick the progress file")
+    (repo / "PROGRESS-sup.md").write_text("- [x] T1. first item\n", encoding="utf-8")
+    (repo / "one.txt").write_text("changed", encoding="utf-8")
+    assert uncommitted_paths(repo, ignore=("PROGRESS-sup.md",)) == ["one.txt"]
+    plain = tmp_path / "plain"
+    plain.mkdir()
+    (plain / "a.txt").write_text("x", encoding="utf-8")
+    # git cannot answer in a directory that is not a repository; the finish check must count it clean.
+    assert uncommitted_paths(plain) == []
+
+
+def test_finished_clean_repo_returns_zero_at_once(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config, run_dir = _git_dirty_repo(tmp_path)
+    clock = Clock()
+    calls = {"n": 0}
+    launches: list[str] = []
+
+    def fake_is_running(cfg: RunConfig, quiet: bool = False) -> bool:
+        calls["n"] += 1
+        if calls["n"] == 3:
+            (cfg.repo / "PROGRESS-sup.md").write_text(_TICKED, encoding="utf-8")
+        return calls["n"] in (2, 3)
+
+    monkeypatch.setattr(agent_module, "is_running", fake_is_running)
+    def fake_launch(cfg: RunConfig, message: str) -> int:
+        launches.append(message)
+        return 0
+
+    monkeypatch.setattr(agent_module, "launch", fake_launch)
+
+    logs: list[str] = []
+    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+
+    # A clean finished tree ends the run at once; no extra session is launched.
+    assert code == 0
+    assert launches == [_expected_message(run_dir)]
+    assert logs == ["session 1 ended: 2/2 done, 0 blocked"]
+
+
+def test_finished_dirty_repo_gets_exactly_one_more_session(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config, run_dir = _git_dirty_repo(tmp_path)
+    (config.repo / "one.txt").write_text("changed", encoding="utf-8")  # ticked work left uncommitted
+    clock = Clock()
+    calls = {"n": 0}
+    launches: list[str] = []
+
+    def fake_is_running(cfg: RunConfig, quiet: bool = False) -> bool:
+        calls["n"] += 1
+        if calls["n"] == 3:
+            (cfg.repo / "PROGRESS-sup.md").write_text(_TICKED, encoding="utf-8")
+        if calls["n"] == 5:
+            # The extra session commits the work of the last ticked item.
+            _git_commit(cfg.repo, "one.txt", "changed", f"{cfg.prefix}1: first item")
+        return calls["n"] in (2, 3, 5)
+
+    monkeypatch.setattr(agent_module, "is_running", fake_is_running)
+    def fake_launch(cfg: RunConfig, message: str) -> int:
+        launches.append(message)
+        return 0
+
+    monkeypatch.setattr(agent_module, "launch", fake_launch)
+
+    logs: list[str] = []
+    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+
+    assert code == 0
+    assert len(launches) == 2
+    assert (
+        launches[1]
+        == "All items are ticked in PROGRESS-sup.md but its work is not committed. "
+        "Commit the work of the last ticked item now: stage only that item's files and "
+        "PROGRESS-sup.md, then stop."
+    )
+    assert logs == [
+        "session 1 ended: 2/2 done, 0 blocked",
+        "every item is ticked but the repo has uncommitted changes: one.txt",
+    ]
+
+
+def test_still_dirty_after_extra_session_returns_one(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config, run_dir = _git_dirty_repo(tmp_path)
+    (config.repo / "one.txt").write_text("changed", encoding="utf-8")  # ticked work left uncommitted
+    clock = Clock()
+    calls = {"n": 0}
+    launches: list[str] = []
+
+    def fake_is_running(cfg: RunConfig, quiet: bool = False) -> bool:
+        calls["n"] += 1
+        if calls["n"] == 3:
+            (cfg.repo / "PROGRESS-sup.md").write_text(_TICKED, encoding="utf-8")
+        return calls["n"] in (2, 3, 5)
+
+    monkeypatch.setattr(agent_module, "is_running", fake_is_running)
+    def fake_launch(cfg: RunConfig, message: str) -> int:
+        launches.append(message)
+        return 0
+
+    monkeypatch.setattr(agent_module, "launch", fake_launch)
+
+    logs: list[str] = []
+    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+
+    # The extra session ran but committed nothing; the supervisor gives up with a human-facing line.
+    assert code == 1
+    assert len(launches) == 2
+    assert logs[-1] == "still uncommitted after one more session; a human should look"
+
+
+def test_untracked_file_alone_does_not_count_as_dirty(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config, run_dir = _git_dirty_repo(tmp_path)
+    (config.repo / "stray.txt").write_text("new", encoding="utf-8")  # untracked only
+    clock = Clock()
+    calls = {"n": 0}
+    launches: list[str] = []
+
+    def fake_is_running(cfg: RunConfig, quiet: bool = False) -> bool:
+        calls["n"] += 1
+        if calls["n"] == 3:
+            (cfg.repo / "PROGRESS-sup.md").write_text(_TICKED, encoding="utf-8")
+        return calls["n"] in (2, 3)
+
+    monkeypatch.setattr(agent_module, "is_running", fake_is_running)
+    def fake_launch(cfg: RunConfig, message: str) -> int:
+        launches.append(message)
+        return 0
+
+    monkeypatch.setattr(agent_module, "launch", fake_launch)
+
+    logs: list[str] = []
+    code = supervise(config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append)
+
+    # Untracked lines do not count as uncommitted work; the run ends at once with no extra session.
+    assert code == 0
+    assert launches == [_expected_message(run_dir)]
+    assert logs == ["session 1 ended: 2/2 done, 0 blocked"]
 

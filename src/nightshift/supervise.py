@@ -219,6 +219,30 @@ def describe_repo_change(old_fp: str, new_fp: str) -> str:
     return shown
 
 
+def uncommitted_paths(repo: Path, ignore: tuple[str, ...] = ()) -> list[str]:
+    """Return repo-relative paths with uncommitted changes to tracked files.
+
+    Untracked lines (??) do not count and git that cannot answer counts as clean, so a directory
+    that is not a repository never blocks the finish check. Paths in ignore are skipped; the
+    supervisor passes its progress file because the agent edits it after every item.
+    """
+    try:
+        # --no-optional-locks: this status must never take the index lock an agent commit needs
+        result = git.run_git(repo, "--no-optional-locks", "status", "--porcelain")
+    except OSError:
+        return []
+    if result.returncode != 0:
+        return []
+    paths: list[str] = []
+    for line in result.stdout.splitlines():
+        if len(line) < 4 or line.startswith("??"):
+            continue
+        path = line[3:].strip()
+        if path not in ignore:
+            paths.append(path)
+    return paths
+
+
 def supervise(
     config: RunConfig,
     run_dir: Path,
@@ -399,7 +423,29 @@ def supervise(
                 f"session {session} ended: {len(progress.done)}/{total} done, {len(progress.blocked)} blocked"
             )
             if progress.finished:
-                return 0
+                # A run that ends with work outside any commit looks done and is not, so one more
+                # session gets to commit it before the supervisor gives up on the tree.
+                dirty = uncommitted_paths(config.repo, ignore=(progress_path.name,))
+                if not dirty:
+                    return 0
+                _log_with_events(
+                    "every item is ticked but the repo has uncommitted changes: " + "; ".join(dirty[:3])
+                )
+                commit_message = (
+                    f"All items are ticked in {progress_path.name} but its work is not committed. "
+                    f"Commit the work of the last ticked item now: stage only that item's files and "
+                    f"{progress_path.name}, then stop."
+                )
+                agent.launch(config, commit_message)
+                while True:
+                    status = _status()
+                    if status is False or (status is None and _status_gave_up()):
+                        break
+                dirty = uncommitted_paths(config.repo, ignore=(progress_path.name,))
+                if not dirty:
+                    return 0
+                _log_with_events("still uncommitted after one more session; a human should look")
+                return 1
             if len(progress.done) > last_done:
                 empty_streak = 0
             else:
