@@ -279,6 +279,7 @@ def test_lessons_md_has_a_section_per_new_rule() -> None:
     assert "## Notes files are append-only" in lessons
     assert "## Never kill by name" in lessons
     assert "## Never push" in lessons
+    assert "## A stuck Cline session" in lessons
 
 
 def test_start_file_names_a_branch_when_none_is_configured(tmp_path: Path) -> None:

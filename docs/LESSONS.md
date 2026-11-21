@@ -55,3 +55,15 @@ On 2026-11-19 an agent in an Iris run cleared its own stuck test runs with `Stop
 
 ## Never push
 An agent that pushes its own branch puts commits on the remote before the operator has reviewed them, and the rebase-and-push the operator does after the run then fails or skips the review. The rule: no `git push` and no new remote branches during a run; the operator reviews, rebases and pushes after it ends.
+
+## A stuck Cline session
+
+A Cline session can get stuck processing an oversized context for hours: the model keeps working on one request and never returns, so the agent looks alive but does nothing new. `agent.idle_minutes` and `agent.item_minutes` log it (item_minutes also marks the item BLOCKED), but neither can stop the session without a configured `agent.stop` command; the recovery is manual, in this order:
+
+1. Find the stuck session with `cline history --json --limit 1`, then delete it with `cline history delete --session-id <id>`; deleting the session ends that conversation so no further prompt can land in the same dead context.
+2. Stop the supervisor by its pid (never by process name), if it is still waiting; left alone it would relaunch a fresh agent straight back into the stuck state, and killing by name takes down other processes with it.
+3. Restart the model server so it drops the request: for LM Studio run `lms server stop`, then `lms server start`; the oversized context lives in the server's memory, and only dropping it frees the model to answer a new session.
+4. Remove " BLOCKED" from the item's line in the progress file if item_minutes marked it; the mark records that the time limit was hit, not that the item failed, so the run can retry the same item on its next pass.
+5. Run `nightshift supervise <run dir>` again to pick the run up where it left off.
+
+Never kill the Cline hub while doing this: other Cline sessions use it, and stopping it ends them too.

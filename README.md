@@ -208,7 +208,7 @@ myrun/                  the run directory, outside the repo
 | `agent.launch_backoff_seconds` | `60` | seconds to wait before relaunching a failed agent start; doubles each failure up to 15 minutes; each failed start uses one of `max_sessions` |
 | `agent.max_launch_failures` | `6` | consecutive failed starts before the supervisor gives up with exit code 2 |
 
-Note for Cline users: the launch command may print "zen dispatch failed" while the session still starts; nightshift does not treat launch output as failure.
+Note for Cline users: the launch command may print "zen dispatch failed" while the session still starts; nightshift does not treat launch output as failure. If your agent session is stuck processing an oversized context, see "A stuck Cline session" in docs/LESSONS.md for the recovery steps.
 
 ## Lessons
 
