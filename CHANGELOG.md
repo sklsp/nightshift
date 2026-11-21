@@ -4,6 +4,7 @@
 
 - git: run_git decodes git output as UTF-8 with errors="replace", so file contents and commit messages no longer depend on the locale code page
 - docs: README Track record now totals today's forty-eight runs across Iris, Sparton and nightshift itself (48 runs, 104/104 items, 27 h 4 min, 58 sessions, 7 warnings) and names the pre-supervisor-log runs that are not counted
+- supervise: when every item is ticked but tracked files are still uncommitted (untracked lines and the progress file do not count), the supervisor launches exactly one more session to commit that work and returns 1 with a human-facing log line if it stays dirty
 
 ## [0.22.0] - 2026-11-21
 

@@ -68,6 +68,7 @@ Every rule below lives in `supervise()` in `src/nightshift/supervise.py` unless 
 - **Empty sessions.** After each ended session the supervisor compares how many items are done; three consecutive sessions with no new item done stop it with exit code 1 and a line saying a human should look. `max_sessions` (default 20) caps the total number of sessions either way.
 - **The repo lock.** Before its first poll, supervise writes `<git dir>/nightshift-supervise.lock` holding its pid and run dir (`_take_lock`). A live pid in an existing lock means another supervisor is running: this one refuses with exit code 2. A dead or unreadable lock is removed as stale and taken over. The lock lives in the repo's git directory, not the run folder, so every run dir that points at the same repo shares one lock: it guards the repo, not the run.
 - **The branch check.** When `run.branch` is set and differs from what `current_branch` reports, supervise refuses to start with exit code 2 before taking the lock; `doctor` reports the same mismatch (`cli.py`, `_branch_check`).
+- **Uncommitted work at the end.** When every item is ticked but tracked files still have uncommitted changes (untracked lines and the progress file do not count), `supervise()` launches exactly one more session whose message says to commit that work, then returns 0 if the tree is clean or logs a human-facing line and returns 1 (`uncommitted_paths`).
 
 ## The files a run leaves behind
 
