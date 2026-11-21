@@ -521,6 +521,132 @@ def test_unchanged_fingerprint_without_stop_only_logs(tmp_path: Path, monkeypatc
     assert "stopped after 2 sessions" in logs[-1]
 
 
+def test_frozen_repo_is_reported_stuck_after_idle_minutes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=2, idle_minutes=1)
+    clock = Clock()
+    calls = {"n": 0}
+
+    def fake_is_running(cfg: RunConfig, quiet: bool = False) -> bool:
+        # The agent keeps running the whole time while the repo stays frozen.
+        calls["n"] += 1
+        return calls["n"] <= 4
+
+    monkeypatch.setattr(agent_module, "is_running", fake_is_running)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
+    stop_times: list[float] = []
+    monkeypatch.setattr(agent_module, "stop", lambda cfg: stop_times.append(clock.t))
+
+    logs: list[str] = []
+    code = supervise(
+        config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append, fingerprint=lambda repo: "same",
+        git_dir=no_git_dir
+    )
+
+    assert code == 1
+    # The idle clock starts at the first readable fingerprint (t=30), so one minute is up at t=90.
+    assert stop_times == [90.0]
+    assert logs.count("agent looks stuck: no commit and no file change for 1 minutes") == 1
+
+
+def test_item_limit_below_idle_blocks_the_item_first(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=2, idle_minutes=2, item_minutes=1)
+    clock = Clock()
+    calls = {"n": 0}
+
+    def fake_is_running(cfg: RunConfig, quiet: bool = False) -> bool:
+        # The agent keeps running on the first item while the repo stays frozen.
+        calls["n"] += 1
+        return calls["n"] <= 6
+
+    monkeypatch.setattr(agent_module, "is_running", fake_is_running)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
+    stops_at: list[float] = []
+    monkeypatch.setattr(agent_module, "stop", lambda cfg: stops_at.append(clock.t))
+
+    logs: list[str] = []
+    code = supervise(
+        config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append, fingerprint=lambda repo: "same",
+        git_dir=no_git_dir
+    )
+
+    assert code == 0
+    # The item limit (one minute) fires before the idle limit (two minutes): T1 is blocked at t=90,
+    # the stuck report lands at t=150, and T2 (next since t=120) hits its own one-minute window
+    # on the poll after the stop-wait loop, so both items end up resolved.
+    assert logs == [
+        "item T1 blocked by the supervisor after 1 minutes",
+        "agent looks stuck: no commit and no file change for 2 minutes",
+        "item T2 blocked by the supervisor after 1 minutes",
+        "session 1 ended: 0/2 done, 2 blocked",
+    ]
+    # One stop from each item block, one from the stuck report.
+    assert stops_at == [90.0, 150.0, 180.0]
+    lines = (config.repo / "PROGRESS-sup.md").read_text(encoding="utf-8").splitlines()
+    assert "- [ ] T1. first item BLOCKED" in lines
+    assert "- [ ] T2. second item BLOCKED" in lines
+
+
+def test_item_limit_above_idle_reports_stuck_before_blocking(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=2, idle_minutes=1, item_minutes=2)
+    clock = Clock()
+    calls = {"n": 0}
+
+    def fake_is_running(cfg: RunConfig, quiet: bool = False) -> bool:
+        # The agent keeps running on the first item while the repo stays frozen.
+        calls["n"] += 1
+        return calls["n"] <= 4
+
+    monkeypatch.setattr(agent_module, "is_running", fake_is_running)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
+    stops: list[RunConfig] = []
+    monkeypatch.setattr(agent_module, "stop", lambda cfg: stops.append(cfg))
+
+    logs: list[str] = []
+    code = supervise(
+        config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append, fingerprint=lambda repo: "same",
+        git_dir=no_git_dir
+    )
+
+    assert code == 1
+    # The idle limit (one minute) fires before the item limit (two minutes), so nothing gets blocked.
+    assert logs.count("agent looks stuck: no commit and no file change for 1 minutes") == 1
+    assert not any("blocked by the supervisor" in line for line in logs)
+    assert "BLOCKED" not in (config.repo / "PROGRESS-sup.md").read_text(encoding="utf-8")
+    assert len(stops) == 1
+
+
+def test_none_fingerprint_does_not_reset_the_idle_clock(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=2, idle_minutes=1)
+    clock = Clock()
+    calls = {"n": 0}
+
+    def fake_is_running(cfg: RunConfig, quiet: bool = False) -> bool:
+        # The agent keeps running while git fails on every other poll.
+        calls["n"] += 1
+        return calls["n"] <= 4
+
+    monkeypatch.setattr(agent_module, "is_running", fake_is_running)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
+    stop_times: list[float] = []
+    monkeypatch.setattr(agent_module, "stop", lambda cfg: stop_times.append(clock.t))
+
+    def fingerprint(repo: Path) -> str | None:
+        # Odd polls stand in for a git failure; the readable ones never change.
+        return "same" if calls["n"] % 2 == 0 else None
+
+    logs: list[str] = []
+    code = supervise(
+        config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append, fingerprint=fingerprint,
+        git_dir=no_git_dir
+    )
+
+    assert code == 1
+    # The failed polls must not restart the idle clock: one minute after the first readable
+    # fingerprint (t=30) is t=90, and that is when the stop lands.
+    assert stop_times == [90.0]
+    assert logs.count("agent looks stuck: no commit and no file change for 1 minutes") == 1
+
+
 class _FlushRecorder:
     """Stands in for stdout redirected to a file; records the content after every flush."""
 
