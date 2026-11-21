@@ -14,7 +14,7 @@ import pytest
 import nightshift.agent as agent_module
 from nightshift.cli import main
 from nightshift.config import RunConfig
-from nightshift.supervise import _pid_alive, mark_item_blocked, supervise
+from nightshift.supervise import _pid_alive, describe_repo_change, mark_item_blocked, supervise
 
 
 class Clock:
@@ -645,6 +645,83 @@ def test_none_fingerprint_does_not_reset_the_idle_clock(tmp_path: Path, monkeypa
     # fingerprint (t=30) is t=90, and that is when the stop lands.
     assert stop_times == [90.0]
     assert logs.count("agent looks stuck: no commit and no file change for 1 minutes") == 1
+
+
+def test_describe_repo_change_says_what_changed() -> None:
+    # A moved HEAD is reported as such, whatever the status lines do.
+    assert describe_repo_change("aaa\n M a.txt", "bbb\n?? b.txt") == "HEAD moved"
+    # With the same HEAD, the porcelain lines that are new or gone are listed, new first.
+    assert (
+        describe_repo_change("aaa\n M a.txt\n?? b.txt", "aaa\n M a.txt\nM c.txt")
+        == "M c.txt; ?? b.txt"
+    )
+    # More than three changed lines are cut to three with the rest counted.
+    old = "aaa\n"
+    new = "aaa\n M a.txt\n M b.txt\n?? c.txt\nA d.txt\nD e.txt\n"
+    assert describe_repo_change(old, new) == " M a.txt;  M b.txt; ?? c.txt; and 2 more"
+
+
+def test_repo_change_after_a_quiet_stretch_is_logged(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5, idle_minutes=90)
+    clock = Clock()
+    calls = {"n": 0}
+
+    def fake_is_running(cfg: RunConfig, quiet: bool = False) -> bool:
+        # The agent ticks both items when the commit lands and keeps running one poll longer.
+        calls["n"] += 1
+        if calls["n"] == 142:
+            (config.repo / "PROGRESS-sup.md").write_text(_TICKED, encoding="utf-8")
+        return calls["n"] <= 143
+
+    monkeypatch.setattr(agent_module, "is_running", fake_is_running)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
+
+    # The repo is quiet for seventy minutes (HEAD aaa), then a commit lands and moves HEAD to bbb.
+    def fingerprint(repo: Path) -> str:
+        if clock.t < 4230:
+            return "aaa\n M a.txt"
+        return "bbb\n M a.txt"
+
+    logs: list[str] = []
+    code = supervise(
+        config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append, fingerprint=fingerprint,
+        git_dir=no_git_dir
+    )
+
+    assert code == 0
+    # The first readable fingerprint lands at t=30, so the change at t=4230 follows seventy quiet minutes.
+    assert logs.count("repo changed after 70 minutes quiet: HEAD moved") == 1
+
+
+def test_repo_change_before_ten_quiet_minutes_is_not_logged(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5)
+    clock = Clock()
+    calls = {"n": 0}
+
+    def fake_is_running(cfg: RunConfig, quiet: bool = False) -> bool:
+        # The agent ticks both items when the commit lands and keeps running one poll longer.
+        calls["n"] += 1
+        if calls["n"] == 11:
+            (config.repo / "PROGRESS-sup.md").write_text(_TICKED, encoding="utf-8")
+        return calls["n"] <= 12
+
+    monkeypatch.setattr(agent_module, "is_running", fake_is_running)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
+
+    # The commit lands five minutes after the first readable fingerprint, below the ten minute mark.
+    def fingerprint(repo: Path) -> str:
+        if clock.t < 300:
+            return "aaa\n M a.txt"
+        return "bbb\n M a.txt"
+
+    logs: list[str] = []
+    code = supervise(
+        config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append, fingerprint=fingerprint,
+        git_dir=no_git_dir
+    )
+
+    assert code == 0
+    assert not any("repo changed" in line for line in logs)
 
 
 class _FlushRecorder:

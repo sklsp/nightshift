@@ -38,6 +38,8 @@ from nightshift.progress import Progress, read_progress
 _LOCK_NAME = "nightshift-supervise.lock"
 _PROCESS_QUERY_INFORMATION = 0x1000
 _STILL_ACTIVE = 259
+# a fingerprint change after this much quiet time gets its own log line, so the run stays readable
+_CHANGE_QUIET_MINUTES = 10
 
 
 def _log(message: str) -> None:
@@ -194,6 +196,27 @@ def read_supervisor_events(run_dir: Path) -> list[dict[str, str]]:
     return events
 
 
+def describe_repo_change(old_fp: str, new_fp: str) -> str:
+    """Describe what a changed fingerprint means for the run log.
+
+    A fingerprint is HEAD's hash plus git status --porcelain text (git.fingerprint), so a moved HEAD
+    is reported as such and otherwise the porcelain lines that are new or gone are listed, at most
+    three of them with the rest counted: after a quiet stretch the next reader must see what changed.
+    """
+    old_head, _, old_status = old_fp.partition("\n")
+    new_head, _, new_status = new_fp.partition("\n")
+    if old_head != new_head:
+        return "HEAD moved"
+    old_lines = [line for line in old_status.splitlines() if line]
+    new_lines = [line for line in new_status.splitlines() if line]
+    changed = [line for line in new_lines if line not in old_lines]
+    changed += [line for line in old_lines if line not in new_lines]
+    shown = "; ".join(changed[:3])
+    if len(changed) > 3:
+        shown += f"; and {len(changed) - 3} more"
+    return shown
+
+
 def supervise(
     config: RunConfig,
     run_dir: Path,
@@ -339,6 +362,12 @@ def supervise(
                     break
                 fp = fingerprint(config.repo)
                 if fp is not None and fp != last_fp:
+                    quiet_seconds = now() - fp_since
+                    if last_fp is not None and quiet_seconds >= _CHANGE_QUIET_MINUTES * 60:
+                        _log_with_events(
+                            f"repo changed after {int(quiet_seconds // 60)} minutes quiet: "
+                            f"{describe_repo_change(last_fp, fp)}"
+                        )
                     last_fp = fp
                     fp_since = now()
                     stuck_reported = False
