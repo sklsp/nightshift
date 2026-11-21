@@ -1,0 +1,1 @@
+- [x] Y1. typing: strict mypy over the tests (314 passed in 50.15s)

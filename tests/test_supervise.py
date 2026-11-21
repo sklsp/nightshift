@@ -9,6 +9,8 @@ from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
+import pytest
+
 import nightshift.agent as agent_module
 from nightshift.cli import main
 from nightshift.config import RunConfig
@@ -52,12 +54,12 @@ def _setup(
     progress_text: str,
     max_sessions: int,
     *,
-    idle_minutes=60,
-    item_minutes=0,
-    stop=None,
-    launch_backoff_seconds=60,
-    max_launch_failures=6,
-    branch="",
+    idle_minutes: int = 60,
+    item_minutes: int = 0,
+    stop: list[str] | None = None,
+    launch_backoff_seconds: int = 60,
+    max_launch_failures: int = 6,
+    branch: str = "",
 ) -> tuple[RunConfig, Path]:
     """Build a repo with a progress file and a run dir holding two items."""
     repo = tmp_path / "repo"
@@ -102,7 +104,7 @@ def no_git_dir(repo: Path) -> Path | None:
     return None
 
 
-def test_supervise_finishes_when_progress_gets_ticked(tmp_path: Path, monkeypatch) -> None:
+def test_supervise_finishes_when_progress_gets_ticked(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5)
     clock = Clock()
     calls = {"n": 0}
@@ -133,7 +135,7 @@ def test_supervise_finishes_when_progress_gets_ticked(tmp_path: Path, monkeypatc
     assert logs == ["session 1 ended: 2/2 done, 0 blocked"]
 
 
-def test_supervise_stops_at_max_sessions(tmp_path: Path, monkeypatch) -> None:
+def test_supervise_stops_at_max_sessions(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=2)
     clock = Clock()
     launches: list[str] = []
@@ -157,7 +159,7 @@ def test_supervise_stops_at_max_sessions(tmp_path: Path, monkeypatch) -> None:
     assert "stopped after 2 sessions" in logs[-1]
 
 
-def test_supervise_stops_after_three_empty_sessions(tmp_path: Path, monkeypatch) -> None:
+def test_supervise_stops_after_three_empty_sessions(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=10)
     clock = Clock()
     launches: list[str] = []
@@ -187,7 +189,7 @@ def test_supervise_stops_after_three_empty_sessions(tmp_path: Path, monkeypatch)
     assert logs[-1] == "agent stuck: no new item done three times in a row; a human should look"
 
 
-def test_supervise_does_not_launch_while_running(tmp_path: Path, monkeypatch) -> None:
+def test_supervise_does_not_launch_while_running(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=2)
     clock = Clock()
     events: list[str] = []
@@ -217,7 +219,7 @@ def test_supervise_does_not_launch_while_running(tmp_path: Path, monkeypatch) ->
     assert events.index("launch") > 2
 
 
-def test_supervise_never_polls_faster_than_poll_seconds(tmp_path: Path, monkeypatch) -> None:
+def test_supervise_never_polls_faster_than_poll_seconds(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=1)
     clock = Clock()
     times: list[float] = []
@@ -242,7 +244,7 @@ def test_supervise_never_polls_faster_than_poll_seconds(tmp_path: Path, monkeypa
     assert all(gap >= config.poll_seconds - 1e-9 for gap in gaps)
 
 
-def test_grace_period_waits_for_agent_to_start(tmp_path: Path, monkeypatch) -> None:
+def test_grace_period_waits_for_agent_to_start(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5)
     clock = Clock()
     calls = {"n": 0}
@@ -266,7 +268,7 @@ def test_grace_period_waits_for_agent_to_start(tmp_path: Path, monkeypatch) -> N
     assert logs == ["session 1 ended: 2/2 done, 0 blocked"]
 
 
-def test_grace_period_logs_when_agent_never_starts(tmp_path: Path, monkeypatch) -> None:
+def test_grace_period_logs_when_agent_never_starts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=2)
     clock = Clock()
 
@@ -286,7 +288,7 @@ def test_grace_period_logs_when_agent_never_starts(tmp_path: Path, monkeypatch) 
     assert clock.sleeps.count(120) == 1
 
 
-def test_fast_agent_that_finishes_before_any_poll_ends_the_run(tmp_path: Path, monkeypatch) -> None:
+def test_fast_agent_that_finishes_before_any_poll_ends_the_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5)
     clock = Clock()
     calls = {"n": 0}
@@ -313,7 +315,7 @@ def test_fast_agent_that_finishes_before_any_poll_ends_the_run(tmp_path: Path, m
     assert logs[-1] == "session 1 ended: 2/2 done, 0 blocked"
 
 
-def test_failed_start_backs_off_then_the_next_session_finishes(tmp_path: Path, monkeypatch) -> None:
+def test_failed_start_backs_off_then_the_next_session_finishes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5)
     clock = Clock()
     launches: list[str] = []
@@ -344,7 +346,7 @@ def test_failed_start_backs_off_then_the_next_session_finishes(tmp_path: Path, m
     assert clock.sleeps.count(60) == 1
 
 
-def test_repeated_failed_starts_end_with_exit_code_two(tmp_path: Path, monkeypatch) -> None:
+def test_repeated_failed_starts_end_with_exit_code_two(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=10)
     clock = Clock()
     launches: list[str] = []
@@ -368,7 +370,7 @@ def test_repeated_failed_starts_end_with_exit_code_two(tmp_path: Path, monkeypat
     assert logs[-1] == "agent cannot be launched after 6 tries; a human should look"
 
 
-def test_launch_code_in_ok_codes_is_not_logged(tmp_path: Path, monkeypatch) -> None:
+def test_launch_code_in_ok_codes_is_not_logged(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5)
     config = replace(config, launch_ok_codes=[0, 1])
     clock = Clock()
@@ -394,7 +396,7 @@ def test_launch_code_in_ok_codes_is_not_logged(tmp_path: Path, monkeypatch) -> N
     assert logs == ["session 1 ended: 2/2 done, 0 blocked"]
 
 
-def test_launch_code_outside_ok_codes_is_logged(tmp_path: Path, monkeypatch) -> None:
+def test_launch_code_outside_ok_codes_is_logged(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5)
     clock = Clock()
     calls = {"n": 0}
@@ -419,7 +421,7 @@ def test_launch_code_outside_ok_codes_is_logged(tmp_path: Path, monkeypatch) -> 
     assert logs == ["agent launch exited with code 1", "session 1 ended: 2/2 done, 0 blocked"]
 
 
-def test_launch_backoff_is_capped_at_fifteen_minutes(tmp_path: Path, monkeypatch) -> None:
+def test_launch_backoff_is_capped_at_fifteen_minutes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=10, launch_backoff_seconds=600, max_launch_failures=3)
     clock = Clock()
 
@@ -438,7 +440,7 @@ def test_launch_backoff_is_capped_at_fifteen_minutes(tmp_path: Path, monkeypatch
     assert all(s <= 900 for s in clock.sleeps)
 
 
-def test_changing_fingerprint_never_triggers(tmp_path: Path, monkeypatch) -> None:
+def test_changing_fingerprint_never_triggers(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5, idle_minutes=1)
     clock = Clock()
     calls = {"n": 0}
@@ -467,7 +469,7 @@ def test_changing_fingerprint_never_triggers(tmp_path: Path, monkeypatch) -> Non
     assert not any("agent looks stuck" in line for line in logs)
 
 
-def test_unchanged_fingerprint_triggers_and_runs_stop_once(tmp_path: Path, monkeypatch) -> None:
+def test_unchanged_fingerprint_triggers_and_runs_stop_once(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5, idle_minutes=1, stop=["fake-stop"])
     clock = Clock()
     calls = {"n": 0}
@@ -495,7 +497,7 @@ def test_unchanged_fingerprint_triggers_and_runs_stop_once(tmp_path: Path, monke
     assert logs[-1] == "stopped after 5 sessions without finishing; a human should look"
 
 
-def test_unchanged_fingerprint_without_stop_only_logs(tmp_path: Path, monkeypatch) -> None:
+def test_unchanged_fingerprint_without_stop_only_logs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=2, idle_minutes=1)
     clock = Clock()
     calls = {"n": 0}
@@ -534,7 +536,7 @@ class _FlushRecorder:
         self.snapshots.append(self.content)
 
 
-def test_supervise_flushes_log_lines_through_main(tmp_path: Path, monkeypatch) -> None:
+def test_supervise_flushes_log_lines_through_main(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     repo = tmp_path / "repo"
     run_dir = tmp_path / "run"
     repo.mkdir()
@@ -579,7 +581,7 @@ poll_seconds = 0
     assert any("session 1 ended" in snapshot for snapshot in seen)
 
 
-def test_supervise_copies_progress_to_gate_dir(tmp_path: Path, monkeypatch) -> None:
+def test_supervise_copies_progress_to_gate_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5)
     clock = Clock()
     calls = {"n": 0}
@@ -607,7 +609,7 @@ def test_supervise_copies_progress_to_gate_dir(tmp_path: Path, monkeypatch) -> N
     assert logs == ["session 1 ended: 2/2 done, 0 blocked"]
 
 
-def test_supervise_uses_gate_copy_when_repo_progress_deleted(tmp_path: Path, monkeypatch) -> None:
+def test_supervise_uses_gate_copy_when_repo_progress_deleted(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5)
     clock = Clock()
     calls = {"n": 0}
@@ -637,7 +639,9 @@ def test_supervise_uses_gate_copy_when_repo_progress_deleted(tmp_path: Path, mon
     assert logs[-1] == "session 1 ended: 2/2 done, 0 blocked"
 
 
-def test_supervise_missing_progress_everywhere_means_not_started(tmp_path: Path, monkeypatch) -> None:
+def test_supervise_missing_progress_everywhere_means_not_started(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=2)
     (config.repo / "PROGRESS-sup.md").unlink()  # no repo file and no .gate copy yet
     clock = Clock()
@@ -659,7 +663,7 @@ def test_supervise_missing_progress_everywhere_means_not_started(tmp_path: Path,
             assert "0/2 done" in line
 
 
-def test_unknown_status_keeps_session_going_and_logs_recovery(tmp_path: Path, monkeypatch) -> None:
+def test_unknown_status_keeps_session_going_and_logs_recovery(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=1)
     clock = Clock()
     statuses = [None, None, True, False]
@@ -685,7 +689,7 @@ def test_unknown_status_keeps_session_going_and_logs_recovery(tmp_path: Path, mo
     assert not any("treating the session as ended" in line for line in logs)
 
 
-def test_ten_unknown_statuses_end_the_session(tmp_path: Path, monkeypatch) -> None:
+def test_ten_unknown_statuses_end_the_session(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=1)
     clock = Clock()
     launches: list[str] = []
@@ -707,7 +711,9 @@ def test_ten_unknown_statuses_end_the_session(tmp_path: Path, monkeypatch) -> No
     assert logs.count("agent status unknown for 10 polls; treating the session as ended") == 1
 
 
-def test_a_session_after_an_unknown_give_up_gets_a_fresh_budget(tmp_path: Path, monkeypatch) -> None:
+def test_a_session_after_an_unknown_give_up_gets_a_fresh_budget(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=2)
     clock = Clock()
     # Session 1: eleven unknowns end it. Session 2: running, one unknown, running again, then stopped.
@@ -729,7 +735,7 @@ def test_a_session_after_an_unknown_give_up_gets_a_fresh_budget(tmp_path: Path, 
     assert "agent status readable again after 1 failed polls" in logs
 
 
-def test_finished_run_writes_a_timestamped_event_log(tmp_path: Path, monkeypatch) -> None:
+def test_finished_run_writes_a_timestamped_event_log(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5)
     clock = Clock()
     calls = {"n": 0}
@@ -761,7 +767,7 @@ def test_finished_run_writes_a_timestamped_event_log(tmp_path: Path, monkeypatch
     ]
 
 
-def test_unwritable_gate_does_not_stop_the_supervisor(tmp_path: Path, monkeypatch) -> None:
+def test_unwritable_gate_does_not_stop_the_supervisor(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=1)
     (run_dir / ".gate").write_text("not a directory", encoding="utf-8")  # .gate as a file blocks every write into it
     clock = Clock()
@@ -792,7 +798,7 @@ def test_pid_alive_reports_the_current_process() -> None:
     assert _pid_alive(os.getpid())
 
 
-def test_lock_exists_during_run_and_is_removed_after(tmp_path: Path, monkeypatch) -> None:
+def test_lock_exists_during_run_and_is_removed_after(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5)
     _git_init(config.repo)
     lock_path = config.repo / ".git" / "nightshift-supervise.lock"
@@ -819,7 +825,7 @@ def test_lock_exists_during_run_and_is_removed_after(tmp_path: Path, monkeypatch
     assert not lock_path.exists()
 
 
-def test_live_lock_refuses_to_start(tmp_path: Path, monkeypatch) -> None:
+def test_live_lock_refuses_to_start(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5)
     _git_init(config.repo)
     other_pid = 4242  # any pid: the injected alive fake says it is running
@@ -841,7 +847,7 @@ def test_live_lock_refuses_to_start(tmp_path: Path, monkeypatch) -> None:
     assert logs == [f"another supervisor (pid {other_pid}) is running {run_dir!s}; refusing to start"]
 
 
-def test_stale_lock_is_removed_and_taken_over(tmp_path: Path, monkeypatch) -> None:
+def test_stale_lock_is_removed_and_taken_over(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5)
     lock_path = config.repo / ".git" / "nightshift-supervise.lock"
     dead_pid = 4243  # any pid: the injected alive fake says it is gone
@@ -870,7 +876,7 @@ def test_stale_lock_is_removed_and_taken_over(tmp_path: Path, monkeypatch) -> No
     assert seen["pid"] == os.getpid()
 
 
-def test_refuses_to_start_on_the_wrong_branch(tmp_path: Path, monkeypatch) -> None:
+def test_refuses_to_start_on_the_wrong_branch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5, branch="main")
     _git_init(config.repo)
     subprocess.run(
@@ -897,7 +903,7 @@ def test_refuses_to_start_on_the_wrong_branch(tmp_path: Path, monkeypatch) -> No
     assert logs == ["repo is on branch feature, this run needs main; refusing to start"]
 
 
-def test_starts_when_on_the_right_branch(tmp_path: Path, monkeypatch) -> None:
+def test_starts_when_on_the_right_branch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5, branch="night")
     _git_init(config.repo)
     subprocess.run(
@@ -961,7 +967,7 @@ def _git_commit(repo: Path, file_name: str, text: str, message: str) -> tuple[st
     return short_hash, int(unix_time)
 
 
-def test_newly_ticked_items_record_their_commits(tmp_path: Path, monkeypatch) -> None:
+def test_newly_ticked_items_record_their_commits(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5)
     _git_init(config.repo)
     # A base commit first: the run's range starts after it, so both item commits are inside.
@@ -992,7 +998,7 @@ def test_newly_ticked_items_record_their_commits(tmp_path: Path, monkeypatch) ->
     assert f"item {config.prefix}2 committed {second_hash} at {second_time}" in logs
 
 
-def test_item_committed_before_the_run_is_not_recorded(tmp_path: Path, monkeypatch) -> None:
+def test_item_committed_before_the_run_is_not_recorded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5)
     _git_init(config.repo)
     # The item was committed before the run started: it is not in the run's range.
@@ -1017,7 +1023,9 @@ def test_item_committed_before_the_run_is_not_recorded(tmp_path: Path, monkeypat
     assert not any(f"item {config.prefix}1 committed" in line for line in logs)
 
 
-def test_an_item_ticked_before_its_commit_is_recorded_once_the_commit_lands(tmp_path: Path, monkeypatch) -> None:
+def test_an_item_ticked_before_its_commit_is_recorded_once_the_commit_lands(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5)
     _git_init(config.repo)
     _git_commit(config.repo, "base.txt", "base", "chore: start")
@@ -1047,7 +1055,7 @@ def test_an_item_ticked_before_its_commit_is_recorded_once_the_commit_lands(tmp_
     assert first == [f"item {config.prefix}1 committed {hashes['1'][0]} at {hashes['1'][1]}"]
 
 
-def test_no_item_limit_when_zero(tmp_path: Path, monkeypatch) -> None:
+def test_no_item_limit_when_zero(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=2)
     clock = Clock()
     calls = {"n": 0}
@@ -1075,7 +1083,7 @@ def test_no_item_limit_when_zero(tmp_path: Path, monkeypatch) -> None:
     assert stops == []
 
 
-def test_item_past_the_limit_gets_blocked_and_logged(tmp_path: Path, monkeypatch) -> None:
+def test_item_past_the_limit_gets_blocked_and_logged(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=3, item_minutes=1)
     clock = Clock()
     calls = {"n": 0}
@@ -1103,7 +1111,7 @@ def test_item_past_the_limit_gets_blocked_and_logged(tmp_path: Path, monkeypatch
     assert logs.count("item T1 blocked by the supervisor after 1 minutes") == 1
 
 
-def test_item_clock_resets_when_the_next_item_changes(tmp_path: Path, monkeypatch) -> None:
+def test_item_clock_resets_when_the_next_item_changes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=1, item_minutes=1)
     clock = Clock()
     calls = {"n": 0}
@@ -1149,7 +1157,7 @@ def test_mark_item_blocked_appends_the_marker_once(tmp_path: Path) -> None:
 
 
 
-def test_already_blocked_item_is_not_stopped_again(tmp_path: Path, monkeypatch) -> None:
+def test_already_blocked_item_is_not_stopped_again(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     progress = "- [ ] T1. first item BLOCKED\n- [ ] T2. second item\n"
     config, run_dir = _setup(tmp_path, progress, max_sessions=5, item_minutes=1)
     clock = Clock()
@@ -1185,7 +1193,7 @@ def test_already_blocked_item_is_not_stopped_again(tmp_path: Path, monkeypatch) 
 
 
 
-def test_a_done_item_is_never_blocked(tmp_path: Path, monkeypatch) -> None:
+def test_a_done_item_is_never_blocked(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5, item_minutes=1)
     clock = Clock()
     calls = {"n": 0}

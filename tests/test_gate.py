@@ -16,7 +16,12 @@ FAIL_CMD = [sys.executable, "-c", "print('1 failed, 2 passed in 0.01s'); raise S
 LINT_FAIL_CMD = [sys.executable, "-c", "print('lint problem here'); raise SystemExit(3)"]
 
 
-def _config(tmp_path: Path, test=PASS_CMD, lint=None, pre=None) -> RunConfig:
+def _config(
+    tmp_path: Path,
+    test: list[str] = PASS_CMD,
+    lint: list[str] | None = None,
+    pre: list[list[str]] | None = None,
+) -> RunConfig:
     """Build a config whose repo and commands live under tmp_path."""
     repo = tmp_path / "repo"
     repo.mkdir()

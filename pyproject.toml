@@ -28,5 +28,10 @@ pythonpath = ["src"]
 addopts = "-q"
 
 [tool.mypy]
+files = ["src", "tests"]
 mypy_path = "src"
 strict = true
+
+[[tool.mypy.overrides]]
+module = "setuptools.*"
+ignore_missing_imports = true

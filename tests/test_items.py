@@ -55,7 +55,7 @@ def test_blank_lines_stripped_from_body_edges() -> None:
 def test_item_is_frozen() -> None:
     item = Item(number=1, title="t", body="b")
     with pytest.raises(dataclasses.FrozenInstanceError):
-        item.title = "x"
+        item.title = "x"  # type: ignore[misc]  # the write must fail
 
 
 def test_no_items_raises() -> None:

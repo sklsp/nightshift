@@ -9,7 +9,12 @@ from nightshift.agent import AgentError, format_exit_code, is_running, launch
 from nightshift.config import RunConfig
 
 
-def _config(tmp_path: Path, launch=None, status=None, pattern="running") -> RunConfig:
+def _config(
+    tmp_path: Path,
+    launch: list[str] | None = None,
+    status: list[str] | None = None,
+    pattern: str = "running",
+) -> RunConfig:
     """Build a config whose repo and commands live under tmp_path."""
     repo = tmp_path / "repo"
     repo.mkdir()
