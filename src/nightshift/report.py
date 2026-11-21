@@ -20,7 +20,6 @@ _SUPERVISOR_PREFIXES: tuple[tuple[str, str], ...] = (
 
 def _quiet(message: str) -> None:
     """No-op logger so report output stays clean markdown."""
-    return None
 
 
 def build_report(run_dir: Path) -> str:
@@ -169,8 +168,7 @@ def review_warnings(config: RunConfig, items: list[Item], commits: list[tuple[st
             warnings = item_warnings(config, found[0])
         except CommitError:
             continue
-        for warning in warnings:
-            pairs.append((f"{config.prefix}{item.number}", warning))
+        pairs.extend((f"{config.prefix}{item.number}", warning) for warning in warnings)
     return pairs
 
 

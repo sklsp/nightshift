@@ -130,9 +130,11 @@ def commit_report(config: RunConfig, items: list[Item], base: str | None = None)
         if not commit.body.strip():
             empty_bodies.append(f"{short} has an empty body")
         if config.protect:
-            for path in changed_files(config.repo, commit.hash):
-                if any(path.startswith(prefix) for prefix in config.protect):
-                    protected_lines.append(f"{short} touches protected {path}")
+            protected_lines.extend(
+                f"{short} touches protected {path}"
+                for path in changed_files(config.repo, commit.hash)
+                if any(path.startswith(prefix) for prefix in config.protect)
+            )
 
     lines = list(bad_subjects)
     for number in sorted(by_item):
@@ -141,9 +143,9 @@ def commit_report(config: RunConfig, items: list[Item], base: str | None = None)
             shorts = ", ".join(commit.hash[:7] for commit in group)
             lines.append(f"{config.prefix}{number} has {len(group)} commits ({shorts})")
     committed_numbers = set(by_item)
-    for item in items:
-        if item.number not in committed_numbers:
-            lines.append(f"{config.prefix}{item.number} has no commit")
+    lines.extend(
+        f"{config.prefix}{item.number} has no commit" for item in items if item.number not in committed_numbers
+    )
     lines.extend(empty_bodies)
     lines.extend(protected_lines)
     return lines

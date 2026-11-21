@@ -111,9 +111,9 @@ def _test_counts(repo: Path, commit_hash: str, paths: list[str]) -> dict[str, tu
 def _warnings_for(config: RunConfig, paths: list[str], per_file: dict[str, tuple[int, int]]) -> list[str]:
     """Return the plain warning texts of one commit's changed files; empty when clean."""
     warnings: list[str] = []
-    for path in paths:
-        if any(path.startswith(prefix) for prefix in config.protect):
-            warnings.append(f"touches protected {path}")
+    warnings.extend(
+        f"touches protected {path}" for path in paths if any(path.startswith(prefix) for prefix in config.protect)
+    )
     for path, (before, after) in per_file.items():
         if after < before:
             warnings.append(f"fewer tests in {path} ({before} -> {after})")

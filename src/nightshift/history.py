@@ -12,7 +12,6 @@ from nightshift.supervise import read_run_progress
 
 def _quiet(message: str) -> None:
     """No-op logger so history output stays clean rows."""
-    return None
 
 
 @dataclass(frozen=True)

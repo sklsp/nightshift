@@ -107,7 +107,7 @@ def _preflight_commands(config: RunConfig) -> list[tuple[str, list[str]]]:
         commands.append(("lint", config.lint))
     for command in config.pre:
         if command:
-            commands.append((" ".join(command), command))
+            commands.append((" ".join(command), command))  # noqa: PERF401 - the join reads better than a comprehension here
     return commands
 
 
