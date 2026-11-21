@@ -1,2 +1,0 @@
-- [x] C1. supervise: ticked but uncommitted is not finished (329 passed in 57.24s)
-- [x] C2. docs and CHANGELOG (329 passed in 57.33s)
