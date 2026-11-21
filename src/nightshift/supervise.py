@@ -211,6 +211,8 @@ def describe_repo_change(old_fp: str, new_fp: str) -> str:
     new_lines = [line for line in new_status.splitlines() if line]
     changed = [line for line in new_lines if line not in old_lines]
     changed += [line for line in old_lines if line not in new_lines]
+    if not changed:
+        return "the status text changed but no line is new or gone"
     shown = "; ".join(changed[:3])
     if len(changed) > 3:
         shown += f"; and {len(changed) - 3} more"

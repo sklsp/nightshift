@@ -659,6 +659,10 @@ def test_describe_repo_change_says_what_changed() -> None:
     old = "aaa\n"
     new = "aaa\n M a.txt\n M b.txt\n?? c.txt\nA d.txt\nD e.txt\n"
     assert describe_repo_change(old, new) == " M a.txt;  M b.txt; ?? c.txt; and 2 more"
+    # The same lines in another order still say something.
+    assert describe_repo_change("aaa\n M a\n M b", "aaa\n M b\n M a") == (
+        "the status text changed but no line is new or gone"
+    )
 
 
 def test_repo_change_after_a_quiet_stretch_is_logged(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
