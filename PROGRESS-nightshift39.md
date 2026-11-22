@@ -1,2 +1,0 @@
-- [x] S1. supervise: scratch files do not reset the idle clock (355 passed in 60.96s (0:01:00))
-- [x] S2. docs and release 0.25.0 (355 passed in 61.22s (0:01:01))
