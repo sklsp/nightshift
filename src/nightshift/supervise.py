@@ -419,11 +419,18 @@ def supervise(
                         f"agent looks stuck: no commit and no file change for {config.idle_minutes} minutes"
                     )
                     stuck_reported = True
-                    agent.stop(config)
-                    while True:
-                        stop_status = _status()
-                        if stop_status is False or (stop_status is None and _status_gave_up()):
-                            break
+                    if config.stop:
+                        agent.stop(config)
+                        while True:
+                            stop_status = _status()
+                            if stop_status is False or (stop_status is None and _status_gave_up()):
+                                break
+                    else:
+                        # With no stop command there is nothing to run, so waiting for the session to end
+                        # would only freeze the item limit; keep polling instead.
+                        _log_with_events(
+                            "no stop command configured; the session keeps running and the supervisor keeps watching it"
+                        )
                 _check_item_limit()
             progress = read_run_progress(progress_path, config.prefix, run_dir, _log_with_events)
             new_items = [number for number in progress.done if number not in recorded_items]
