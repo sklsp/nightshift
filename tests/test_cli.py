@@ -173,7 +173,7 @@ def test_version_flag_prints_version_and_exits_zero(capsys: pytest.CaptureFixtur
     with pytest.raises(SystemExit) as excinfo:
         main(["--version"])
     assert excinfo.value.code == 0
-    assert "nightshift 0.23.0" in capsys.readouterr().out
+    assert "nightshift 0.24.0" in capsys.readouterr().out
 
 
 def test_gate_start_and_wait_via_cli(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

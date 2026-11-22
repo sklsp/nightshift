@@ -58,7 +58,7 @@ An agent that pushes its own branch puts commits on the remote before the operat
 
 ## A stuck Cline session
 
-A Cline session can get stuck processing an oversized context for hours: the model keeps working on one request and never returns, so the agent looks alive but does nothing new. `agent.idle_minutes` and `agent.item_minutes` log it (item_minutes also marks the item BLOCKED), but neither can stop the session without a configured `agent.stop` command; the recovery is manual, in this order:
+A Cline session can get stuck processing an oversized context for hours: the model keeps working on one request and never returns, so the agent looks alive but does nothing new. `agent.idle_minutes` and `agent.item_minutes` log it (item_minutes also marks the item BLOCKED), but neither can stop the session without a configured `agent.stop` command. When there is no stop command at all, the supervisor keeps watching the session in its normal poll loop and item_minutes still fires. The recovery is manual, in this order:
 
 1. Find the stuck session with `cline history --json --limit 1`, then delete it with `cline history delete --session-id <id>`; deleting the session ends that conversation so no further prompt can land in the same dead context.
 2. Stop the supervisor by its pid (never by process name), if it is still waiting; it can sit in its stuck-session wait indefinitely, a fresh start takes over the stale lock cleanly, and killing by name takes down other processes with it.

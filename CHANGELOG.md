@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## [0.24.0] - 2026-11-22
+
+- supervise: when a session looks stuck and no stop command is configured, the supervisor logs one line and keeps polling instead of waiting for the session to end, so item_minutes can still block it
+
 ## [0.23.0] - 2026-11-22
 
 - unblock: new command removes the BLOCKED marker from one item's unticked line in PROGRESS-<name>.md and prints the rewritten line; it refuses with exit 1 while a live supervisor holds the repo lock or when the progress file is missing, the item is not on it, or it is not marked
