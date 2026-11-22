@@ -11,7 +11,7 @@ license = "MIT"
 dependencies = []
 
 [project.optional-dependencies]
-dev = ["pytest", "ruff", "mypy", "setuptools"]
+dev = ["pytest", "ruff", "mypy", "setuptools>=77"]  # the packaging test builds a wheel with license = "MIT"
 
 [project.scripts]
 nightshift = "nightshift.cli:main"
