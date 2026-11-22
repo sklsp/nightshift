@@ -456,6 +456,17 @@ def test_init_example_contains_commented_launch_ok_codes_key(tmp_path: Path) -> 
     assert "launch_ok_codes" not in data["agent"]
 
 
+def test_init_example_contains_commented_idle_ignore_key(tmp_path: Path) -> None:
+    run_dir = tmp_path / "run"
+    assert main(["init", str(run_dir)]) == 0
+    text = (run_dir / "run.toml").read_text(encoding="utf-8")
+    lines = [line for line in text.splitlines() if "idle_ignore" in line]
+    assert len(lines) == 1
+    assert lines[0].startswith("# idle_ignore = ")
+    data = tomllib.loads(text)
+    assert "idle_ignore" not in data["agent"]
+
+
 def test_init_example_contains_commented_protect_key(tmp_path: Path) -> None:
     run_dir = tmp_path / "run"
     assert main(["init", str(run_dir)]) == 0

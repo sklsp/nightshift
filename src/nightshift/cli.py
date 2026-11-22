@@ -60,6 +60,8 @@ test = ["pytest"]        # test command run from the repo root; no -q here, see 
 # launch_backoff_seconds = 60  # wait before relaunching a failed start; doubles, at most 900
 # max_launch_failures = 6     # failed starts in a row before giving up with exit code 2
 # idle_minutes = 60           # no commit and no file change this long means stuck
+# idle_ignore = ["*.lcov", "*.coverage", ".coverage*", ".tmp_*", "*.tmp", "*.log"]
+#               # untracked files matching these globs do not reset the idle clock; [] ignores nothing
 # item_minutes = 0            # one item next this long without a commit gets BLOCKED; 0 means no limit
 # stop = []                   # optional command run once when a session looks stuck
 """

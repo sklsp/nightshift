@@ -19,6 +19,7 @@ commits stay known even when git no longer shows them as a separate range.
 
 import contextlib
 import ctypes
+import fnmatch
 import json
 import os
 import re
@@ -236,6 +237,29 @@ def describe_repo_change(old_fp: str, new_fp: str) -> str:
     return shown
 
 
+def filter_idle_fingerprint(fp: str, ignore: list[str]) -> str:
+    """Drop untracked porcelain lines whose path matches an idle_ignore pattern.
+
+    The idle clock measures progress, not scratch output: a session that only writes coverage or log
+    files must look frozen to it, while a new test file is real progress and cannot be ignored
+    wholesale. Tracked files always count whatever their name; patterns are fnmatch globs tried
+    against the file name and the whole repo-relative path (fnmatchcase keeps matching identical on
+    Windows and Linux). git.fingerprint stays untouched so every other reader sees the raw status.
+    """
+    head, _, status = fp.partition("\n")
+    kept: list[str] = []
+    for line in status.splitlines():
+        if line and len(line) >= 4:
+            path = line[3:].strip()
+            name = path.rsplit("/", 1)[-1]
+            if line.startswith("??") and any(
+                fnmatch.fnmatchcase(name, pattern) or fnmatch.fnmatchcase(path, pattern) for pattern in ignore
+            ):
+                continue
+        kept.append(line)
+    return head + "\n" + "".join(line + "\n" for line in kept)
+
+
 def uncommitted_paths(repo: Path, ignore: tuple[str, ...] = ()) -> list[str]:
     """Return repo-relative paths with uncommitted changes to tracked files.
 
@@ -404,6 +428,9 @@ def supervise(
                 if status is False or (status is None and _status_gave_up()):
                     break
                 fp = fingerprint(config.repo)
+                if fp is not None:
+                    # scratch files must not reset the idle clock; tracked changes always count, whatever their name
+                    fp = filter_idle_fingerprint(fp, config.idle_ignore)
                 if fp is not None and fp != last_fp:
                     quiet_seconds = now() - fp_since
                     if last_fp is not None and quiet_seconds >= _CHANGE_QUIET_MINUTES * 60:

@@ -101,6 +101,7 @@ def test_defaults_when_optional_keys_missing(tmp_path: Path) -> None:
     assert cfg.launch_grace_polls == 4
     assert cfg.status_retry_polls == 10
     assert cfg.idle_minutes == 60
+    assert cfg.idle_ignore == ["*.lcov", "*.coverage", ".coverage*", ".tmp_*", "*.tmp", "*.log"]
     assert cfg.item_minutes == 0
     assert cfg.stop == []
     assert cfg.launch_backoff_seconds == 60
@@ -323,6 +324,37 @@ launch_ok_codes = [0, "1"]
 """,
     )
     with pytest.raises(ConfigError, match=r"wrong type for 'agent\.launch_ok_codes'"):
+        load_config(tmp_path)
+
+
+def test_idle_ignore_replaced_in_run_toml(tmp_path: Path) -> None:
+    _write(tmp_path, MINIMAL + '\n[agent]\nidle_ignore = ["*.lcov", "scratch/*"]\n')
+    cfg = load_config(tmp_path)
+    assert cfg.idle_ignore == ["*.lcov", "scratch/*"]
+
+
+def test_idle_ignore_empty_list_ignores_nothing(tmp_path: Path) -> None:
+    _write(tmp_path, MINIMAL + "\n[agent]\nidle_ignore = []\n")
+    cfg = load_config(tmp_path)
+    assert cfg.idle_ignore == []
+
+
+def test_idle_ignore_not_a_list_is_rejected(tmp_path: Path) -> None:
+    _write(tmp_path, MINIMAL + '\n[agent]\nidle_ignore = "*.log"\n')
+    with pytest.raises(ConfigError, match=r"wrong type for 'agent\.idle_ignore'"):
+        load_config(tmp_path)
+
+
+def test_idle_ignore_with_non_string_is_rejected(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        MINIMAL
+        + """
+[agent]
+idle_ignore = ["*.log", 1]
+""",
+    )
+    with pytest.raises(ConfigError, match=r"wrong type for 'agent\.idle_ignore'"):
         load_config(tmp_path)
 
 

@@ -10,6 +10,12 @@ class ConfigError(ValueError):
     """The run.toml file is missing or invalid."""
 
 
+# Scratch files an agent writes while working: they must not reset the supervisor's idle clock, so by
+# default they are dropped from the fingerprint the idle check compares (filter_idle_fingerprint in
+# supervise.py). A run.toml can replace the list; an empty list ignores nothing.
+DEFAULT_IDLE_IGNORE = ["*.lcov", "*.coverage", ".coverage*", ".tmp_*", "*.tmp", "*.log"]
+
+
 @dataclass(frozen=True)
 class RunConfig:
     """Validated settings for one nightshift run."""
@@ -36,6 +42,7 @@ class RunConfig:
     launch_grace_polls: int = 4
     status_retry_polls: int = 10
     idle_minutes: int = 60
+    idle_ignore: list[str] = field(default_factory=lambda: list(DEFAULT_IDLE_IGNORE))
     item_minutes: int = 0
     stop: list[str] = field(default_factory=list)
     launch_backoff_seconds: int = 60
@@ -56,6 +63,7 @@ _AGENT_KEYS = {
     "launch_grace_polls",
     "status_retry_polls",
     "idle_minutes",
+    "idle_ignore",
     "item_minutes",
     "stop",
     "launch_backoff_seconds",
@@ -121,6 +129,7 @@ def load_config(run_dir: Path) -> RunConfig:
     if status_retry_polls < 1:
         raise ConfigError("invalid value for 'agent.status_retry_polls': must be at least 1")
     idle_minutes = _int(agent, "agent", "idle_minutes", 60)
+    idle_ignore = _str_list(agent, "agent", "idle_ignore", list(DEFAULT_IDLE_IGNORE))
     item_minutes = _int(agent, "agent", "item_minutes", 0)
     if item_minutes < 0:
         raise ConfigError("invalid value for 'agent.item_minutes': must be at least 0")
@@ -156,6 +165,7 @@ def load_config(run_dir: Path) -> RunConfig:
         launch_grace_polls=launch_grace_polls,
         status_retry_polls=status_retry_polls,
         idle_minutes=idle_minutes,
+        idle_ignore=idle_ignore,
         item_minutes=item_minutes,
         stop=stop,
         launch_backoff_seconds=launch_backoff_seconds,

@@ -13,10 +13,11 @@ import pytest
 
 import nightshift.agent as agent_module
 from nightshift.cli import main
-from nightshift.config import RunConfig
+from nightshift.config import DEFAULT_IDLE_IGNORE, RunConfig
 from nightshift.supervise import (
     _pid_alive,
     describe_repo_change,
+    filter_idle_fingerprint,
     mark_item_blocked,
     supervise,
     uncommitted_paths,
@@ -718,6 +719,174 @@ def test_none_fingerprint_does_not_reset_the_idle_clock(tmp_path: Path, monkeypa
     assert logs.count("agent looks stuck: no commit and no file change for 1 minutes") == 1
 
 
+def test_scratch_files_do_not_reset_the_idle_clock(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=2, idle_minutes=1)
+    clock = Clock()
+    calls = {"n": 0}
+
+    def fake_is_running(cfg: RunConfig, quiet: bool = False) -> bool:
+        # The agent keeps running the whole time while only scratch files appear.
+        calls["n"] += 1
+        return calls["n"] <= 4
+
+    monkeypatch.setattr(agent_module, "is_running", fake_is_running)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
+
+    def fingerprint(repo: Path) -> str:
+        # After the first poll the agent writes coverage and a tmp file; both match idle_ignore.
+        if clock.t < 60:
+            return "aaa\n"
+        return "aaa\n?? a.lcov\n?? .tmp_x\n"
+
+    logs: list[str] = []
+    stuck_at: list[float] = []
+
+    def record(message: str) -> None:
+        if message.startswith("agent looks stuck"):
+            stuck_at.append(clock.t)
+        logs.append(message)
+
+    code = supervise(
+        config, run_dir, sleep=clock.sleep, now=clock.time, log=record, fingerprint=fingerprint,
+        git_dir=no_git_dir
+    )
+
+    assert code == 1
+    # The scratch lines are dropped before the idle comparison, so the clock keeps running from
+    # the first readable fingerprint (t=30) and one minute is up at t=90.
+    assert stuck_at == [90.0]
+    assert logs.count("agent looks stuck: no commit and no file change for 1 minutes") == 1
+
+
+def test_new_test_file_resets_the_idle_clock(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5, idle_minutes=1)
+    clock = Clock()
+    calls = {"n": 0}
+
+    def fake_is_running(cfg: RunConfig, quiet: bool = False) -> bool:
+        # The agent ticks both items when its new test file lands and ends one poll later.
+        calls["n"] += 1
+        if calls["n"] == 4:
+            (config.repo / "PROGRESS-sup.md").write_text(_TICKED, encoding="utf-8")
+        return calls["n"] <= 4
+
+    monkeypatch.setattr(agent_module, "is_running", fake_is_running)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
+
+    def fingerprint(repo: Path) -> str:
+        # A new test file is real progress and must reset the idle clock.
+        if clock.t < 60:
+            return "aaa\n"
+        return "aaa\n?? tests/test_new.py\n"
+
+    logs: list[str] = []
+    code = supervise(
+        config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append, fingerprint=fingerprint,
+        git_dir=no_git_dir
+    )
+
+    assert code == 0
+    # The change at t=60 resets the clock, so one minute is not up before the session ends.
+    assert not any("agent looks stuck" in line for line in logs)
+
+
+def test_tracked_log_file_change_resets_the_idle_clock(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5, idle_minutes=1)
+    clock = Clock()
+    calls = {"n": 0}
+
+    def fake_is_running(cfg: RunConfig, quiet: bool = False) -> bool:
+        # The agent ticks both items when the tracked file changes and ends one poll later.
+        calls["n"] += 1
+        if calls["n"] == 4:
+            (config.repo / "PROGRESS-sup.md").write_text(_TICKED, encoding="utf-8")
+        return calls["n"] <= 4
+
+    monkeypatch.setattr(agent_module, "is_running", fake_is_running)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
+
+    def fingerprint(repo: Path) -> str:
+        # x.log is tracked, so its change counts even though *.log is in idle_ignore.
+        if clock.t < 60:
+            return "aaa\n"
+        return "aaa\n M x.log\n"
+
+    logs: list[str] = []
+    code = supervise(
+        config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append, fingerprint=fingerprint,
+        git_dir=no_git_dir
+    )
+
+    assert code == 0
+    # Tracked files always count whatever their name, so the clock resets at t=60.
+    assert not any("agent looks stuck" in line for line in logs)
+
+
+def test_empty_idle_ignore_restores_the_old_behaviour(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=2, idle_minutes=1)
+    config = replace(config, idle_ignore=[])
+    clock = Clock()
+    calls = {"n": 0}
+
+    def fake_is_running(cfg: RunConfig, quiet: bool = False) -> bool:
+        # The agent keeps running while only scratch files appear.
+        calls["n"] += 1
+        return calls["n"] <= 4
+
+    monkeypatch.setattr(agent_module, "is_running", fake_is_running)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
+
+    def fingerprint(repo: Path) -> str:
+        if clock.t < 60:
+            return "aaa\n"
+        return "aaa\n?? a.lcov\n?? .tmp_x\n"
+
+    logs: list[str] = []
+    code = supervise(
+        config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append, fingerprint=fingerprint,
+        git_dir=no_git_dir
+    )
+
+    assert code == 1
+    # With idle_ignore = [] the scratch lines count as changes, so the clock resets at t=60 and one
+    # minute is not up before the session ends: the old behaviour is restored.
+    assert not any("agent looks stuck" in line for line in logs)
+    assert logs[-1] == "stopped after 2 sessions without finishing; a human should look"
+
+
+def test_repo_change_line_uses_the_filtered_view(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5, idle_minutes=90)
+    clock = Clock()
+    calls = {"n": 0}
+
+    def fake_is_running(cfg: RunConfig, quiet: bool = False) -> bool:
+        # The agent ticks both items when the real file lands and keeps running one poll longer.
+        calls["n"] += 1
+        if calls["n"] == 142:
+            (config.repo / "PROGRESS-sup.md").write_text(_TICKED, encoding="utf-8")
+        return calls["n"] <= 143
+
+    monkeypatch.setattr(agent_module, "is_running", fake_is_running)
+    monkeypatch.setattr(agent_module, "launch", lambda cfg, message: 0)
+
+    def fingerprint(repo: Path) -> str:
+        # Scratch files appear at once; the real file lands after seventy quiet minutes.
+        if clock.t < 4230:
+            return "aaa\n?? a.lcov\n"
+        return "aaa\n?? a.lcov\n?? tests/test_new.py\n"
+
+    logs: list[str] = []
+    code = supervise(
+        config, run_dir, sleep=clock.sleep, now=clock.time, log=logs.append, fingerprint=fingerprint,
+        git_dir=no_git_dir
+    )
+
+    assert code == 0
+    # The scratch line is dropped from both fingerprints, so only the real file is reported.
+    assert logs.count("repo changed after 70 minutes quiet: ?? tests/test_new.py") == 1
+    assert not any("lcov" in line for line in logs)
+
+
 def test_describe_repo_change_says_what_changed() -> None:
     # A moved HEAD is reported as such, whatever the status lines do.
     assert describe_repo_change("aaa\n M a.txt", "bbb\n?? b.txt") == "HEAD moved"
@@ -734,6 +903,32 @@ def test_describe_repo_change_says_what_changed() -> None:
     assert describe_repo_change("aaa\n M a\n M b", "aaa\n M b\n M a") == (
         "the status text changed but no line is new or gone"
     )
+
+
+def test_filter_idle_fingerprint_drops_matching_untracked_lines() -> None:
+    fp = "aaa\n?? build/out.lcov\n?? .tmp_x\n?? tests/test_new.py\n M src/app.py\n?? notes.log\n"
+    out = filter_idle_fingerprint(fp, DEFAULT_IDLE_IGNORE)
+    # The lcov, tmp and log lines are gone; the new test file and the tracked change stay.
+    assert out == "aaa\n?? tests/test_new.py\n M src/app.py\n"
+
+
+def test_filter_idle_fingerprint_keeps_tracked_files_whatever_their_name() -> None:
+    fp = "aaa\n M x.log\nM y.lcov\nD z.tmp\n?? w.log\n"
+    out = filter_idle_fingerprint(fp, DEFAULT_IDLE_IGNORE)
+    # Tracked changes always count; only the untracked log line is dropped.
+    assert out == "aaa\n M x.log\nM y.lcov\nD z.tmp\n"
+
+
+def test_filter_idle_fingerprint_matches_name_and_path() -> None:
+    fp = "aaa\n?? scratch/keep.txt\n?? build/out.lcov\n?? keep.txt\n"
+    # A bare name pattern matches the file name anywhere; a path pattern only its own prefix.
+    assert filter_idle_fingerprint(fp, ["*.lcov"]) == "aaa\n?? scratch/keep.txt\n?? keep.txt\n"
+    assert filter_idle_fingerprint(fp, ["scratch/*"]) == "aaa\n?? build/out.lcov\n?? keep.txt\n"
+
+
+def test_filter_idle_fingerprint_empty_list_changes_nothing() -> None:
+    fp = "aaa\n?? a.lcov\n M b.py\n"
+    assert filter_idle_fingerprint(fp, []) == fp
 
 
 def test_repo_change_after_a_quiet_stretch_is_logged(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
