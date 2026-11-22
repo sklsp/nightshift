@@ -108,4 +108,7 @@ def test_supervise_drives_the_fake_agent_end_to_end(git_template: Path, tmp_path
     events_path = run_dir / ".gate" / "supervise.jsonl"
     raw_lines = events_path.read_text(encoding="utf-8").splitlines()
     messages = [json.loads(line)["msg"] for line in raw_lines if line.strip()]
-    assert "session 1 ended: 3/3 done, 0 blocked" in messages
+    # How many sessions the fake agent needs depends on timing (a fast CI runner can see it between items and
+    # count a session end); what matters is that the last session ends with every item done.
+    session_ends = [m for m in messages if m.startswith("session ") and " ended: " in m]
+    assert session_ends and session_ends[-1].endswith("ended: 3/3 done, 0 blocked"), session_ends
