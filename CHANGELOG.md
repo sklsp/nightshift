@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## [0.25.0] - 2026-11-22
+
+- supervise: untracked files matching agent.idle_ignore (lcov, coverage and tmp scratch by default) no longer reset the idle clock; tracked changes always count whatever their name
+
 ## [0.24.0] - 2026-11-22
 
 - supervise: when a session looks stuck and no stop command is configured, the supervisor logs one line and keeps polling instead of waiting for the session to end, so item_minutes can still block it

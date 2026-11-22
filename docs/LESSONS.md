@@ -60,6 +60,8 @@ An agent that pushes its own branch puts commits on the remote before the operat
 
 A Cline session can get stuck processing an oversized context for hours: the model keeps working on one request and never returns, so the agent looks alive but does nothing new. `agent.idle_minutes` and `agent.item_minutes` log it (item_minutes also marks the item BLOCKED), but neither can stop the session without a configured `agent.stop` command. When there is no stop command at all, the supervisor keeps watching the session in its normal poll loop and item_minutes still fires. The recovery is manual, in this order:
 
+`agent.idle_minutes` measures progress, not output: untracked files matching `agent.idle_ignore` (lcov, coverage and tmp scratch by default) do not reset the idle clock. New untracked files cannot be ignored wholesale because a new test file is real progress, so only the listed patterns are dropped; tracked changes always count, whatever their name.
+
 1. Find the stuck session with `cline history --json --limit 1`, then delete it with `cline history delete --session-id <id>`; deleting the session ends that conversation so no further prompt can land in the same dead context.
 2. Stop the supervisor by its pid (never by process name), if it is still waiting; it can sit in its stuck-session wait indefinitely, a fresh start takes over the stale lock cleanly, and killing by name takes down other processes with it.
 3. Restart the model server so it drops the request: for LM Studio run `lms server stop`, then `lms server start`; the oversized context lives in the server's memory, and only dropping it frees the model to answer a new session.
