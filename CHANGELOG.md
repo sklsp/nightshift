@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- tests: the docs stay true about configuration; every key config.py accepts appears in README.md's config reference, and any run/check/agent key used in a fenced toml block of README.md or docs is one config.py accepts
+
 ## [0.27.0] - 2026-11-23
 
 - review: test counts include JavaScript and TypeScript test files (.test.js, .test.mjs, .test.cjs, .test.ts, .spec.js, .spec.mjs, .spec.ts) next to Python's test_*.py; async def test counts too; README notes that JavaScript and TypeScript test files are counted

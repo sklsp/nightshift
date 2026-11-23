@@ -4,6 +4,7 @@ import argparse
 import re
 from pathlib import Path
 
+from nightshift import config
 from nightshift.cli import build_parser
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -69,6 +70,80 @@ def _mentions(text: str) -> list[tuple[int, str, str | None]]:
 def _read(path: Path) -> str:
     """Read a markdown file with normalized newlines."""
     return path.read_text(encoding="utf-8").replace("\r\n", "\n")
+
+
+def _config_keys() -> dict[str, frozenset[str]]:
+    """The keys config.py accepts per section."""
+    return {
+        "run": frozenset(config._RUN_KEYS),
+        "check": frozenset(config._CHECK_KEYS),
+        "agent": frozenset(config._AGENT_KEYS),
+    }
+
+
+def _config_reference() -> str:
+    """The README's config reference section, from its heading to the next one."""
+    text = _read(README)
+    start = text.index("## Config reference")
+    rest = text[start:]
+    end = rest.find("\n## ", 1)
+    return rest[:end] if end != -1 else rest
+
+
+def test_every_accepted_key_is_in_the_config_reference() -> None:
+    """Every key config.py accepts appears in README.md's config reference table."""
+    section_text = _config_reference()
+    missing = [
+        f"{section}.{key}"
+        for section, keys in sorted(_config_keys().items())
+        for key in sorted(keys)
+        if not re.search(rf"\|\s*`{re.escape(section + '.' + key)}`\s*\|", section_text)
+    ]
+    assert missing == [], (
+        "keys config.py accepts but the README config reference lacks: " + ", ".join(missing)
+    )
+
+
+def _toml_blocks(text: str) -> list[str]:
+    """The contents of every ```toml fenced block in one markdown file."""
+    blocks: list[str] = []
+    current: list[str] | None = None
+    for line in text.splitlines():
+        fence = line.strip()
+        if fence.startswith("```"):
+            if current is None and fence == "```toml":
+                current = []
+            elif current is not None:
+                blocks.append("\n".join(current))
+                current = None
+            continue
+        if current is not None:
+            current.append(line)
+    if current is not None:
+        blocks.append("\n".join(current))
+    return blocks
+
+
+def test_toml_blocks_only_use_accepted_keys() -> None:
+    """Every `key =` line under [run], [check] or [agent] in a ```toml block is accepted by config.py."""
+    keys_by_section = _config_keys()
+    header_re = re.compile(r"^\[(run|check|agent)\]\s*$")
+    key_re = re.compile(r"^([A-Za-z_][A-Za-z0-9_-]*)\s*=")
+    bad: list[str] = []
+    for path in [README, *sorted(DOCS_DIR.glob("*.md"))]:
+        for block in _toml_blocks(_read(path)):
+            section: str | None = None
+            for line in block.splitlines():
+                header = header_re.match(line.strip())
+                if header is not None:
+                    section = header.group(1)
+                    continue
+                key_match = key_re.match(line.strip())
+                if key_match is not None and section is not None and key_match.group(1) not in keys_by_section[section]:
+                    bad.append(f"{path.name}: {section}.{key_match.group(1)}")
+    assert bad == [], (
+        "keys config.py rejects but a toml block uses: " + ", ".join(bad)
+    )
 
 
 def test_every_subcommand_is_documented_in_readme() -> None:
