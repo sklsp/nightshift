@@ -1,2 +1,0 @@
-- [x] W1. review: count JavaScript and TypeScript tests as well (362 passed in 62.31s (0:01:02))
-- [x] W2. docs and release 0.27.0 (362 passed in 60.65s (0:01:00))
