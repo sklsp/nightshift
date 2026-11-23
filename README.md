@@ -206,7 +206,7 @@ myrun/                  the run directory, outside the repo
 | `agent.max_sessions` | `20` | sessions allowed before the supervisor gives up |
 | `agent.launch_grace_polls` | `4` | status polls to wait for a launched agent to report running; if it never does, the supervisor backs off and relaunches without counting the session as empty |
 | `agent.idle_minutes` | `60` | minutes without a repo change (HEAD plus git status) before the supervisor reports the agent stuck |
-| `agent.idle_ignore` | `["*.lcov", "*.coverage", ".coverage*", ".tmp_*", "*.tmp", "*.log"]` | untracked files matching these globs do not reset the idle clock; tracked changes always count, whatever their name |
+| `agent.idle_ignore` | `["*.lcov", "*.coverage", ".coverage*", ".tmp_*", "*.tmp", "tmp-*", "tmp_*", "*-tmp*", ".covtmp*", "*cov*.txt", "*.log", "*probe*"]` | untracked files matching these globs do not reset the idle clock; tracked changes always count, whatever their name |
 | `agent.item_minutes` | `0` | minutes an item may stay next before the supervisor marks it BLOCKED and moves on to the next item; 0 disables the limit |
 | `agent.stop` | `[]` | command run once to end a session when it looks stuck; empty means do nothing |
 | `agent.status_retry_polls` | `10` | status polls in a row that may fail (the status command itself errors) before the session counts as ended; an unreadable status is unknown, never "stopped" |

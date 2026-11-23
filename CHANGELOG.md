@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## [0.26.0] - 2026-11-23
+
+- supervise: agent.idle_ignore defaults gain tmp-*, tmp_*, *-tmp*, .covtmp*, *cov*.txt and *probe* next to the existing patterns, and an untracked folder line now matches on the folder's own name; README config reference shows the new default list
+
 ## [0.25.0] - 2026-11-22
 
 - supervise: untracked files matching agent.idle_ignore (lcov, coverage and tmp scratch by default) no longer reset the idle clock; tracked changes always count whatever their name
