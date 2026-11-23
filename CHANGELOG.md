@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## [0.27.0] - 2026-11-23
+
+- review: test counts include JavaScript and TypeScript test files (.test.js, .test.mjs, .test.cjs, .test.ts, .spec.js, .spec.mjs, .spec.ts) next to Python's test_*.py; async def test counts too; README notes that JavaScript and TypeScript test files are counted
+
 ## [0.26.0] - 2026-11-23
 
 - supervise: agent.idle_ignore defaults gain tmp-*, tmp_*, *-tmp*, .covtmp*, *cov*.txt and *probe* next to the existing patterns, and an untracked folder line now matches on the folder's own name; README config reference shows the new default list
