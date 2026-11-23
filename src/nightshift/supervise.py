@@ -244,14 +244,18 @@ def filter_idle_fingerprint(fp: str, ignore: list[str]) -> str:
     files must look frozen to it, while a new test file is real progress and cannot be ignored
     wholesale. Tracked files always count whatever their name; patterns are fnmatch globs tried
     against the file name and the whole repo-relative path (fnmatchcase keeps matching identical on
-    Windows and Linux). git.fingerprint stays untouched so every other reader sees the raw status.
+    Windows and Linux). An untracked folder line ends in "/", so its name is taken after stripping
+    that slash, and a pattern still matches the folder's own name or the whole path. git.fingerprint
+    stays untouched so every other reader sees the raw status.
     """
     head, _, status = fp.partition("\n")
     kept: list[str] = []
     for line in status.splitlines():
         if line and len(line) >= 4:
             path = line[3:].strip()
-            name = path.rsplit("/", 1)[-1]
+            # An untracked folder line ends in "/", which would leave an empty last part; strip it so
+            # a pattern can match the folder's own name.
+            name = path.rstrip("/").rsplit("/", 1)[-1]
             if line.startswith("??") and any(
                 fnmatch.fnmatchcase(name, pattern) or fnmatch.fnmatchcase(path, pattern) for pattern in ignore
             ):

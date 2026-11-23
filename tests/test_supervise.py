@@ -931,6 +931,34 @@ def test_filter_idle_fingerprint_empty_list_changes_nothing() -> None:
     assert filter_idle_fingerprint(fp, []) == fp
 
 
+def test_filter_idle_fingerprint_drops_new_scratch_names_with_defaults() -> None:
+    # One line per added pattern; each must be dropped by DEFAULT_IDLE_IGNORE alone.
+    fp = (
+        "aaa\n"
+        "?? tmp-v8cov5/\n"
+        "?? tmp_notes.txt\n"
+        "?? x-tmp-y\n"
+        "?? .covtmp12345\n"
+        "?? lcov-summary.txt\n"
+        "?? probe.txt\n"
+    )
+    assert filter_idle_fingerprint(fp, DEFAULT_IDLE_IGNORE) == "aaa\n"
+
+
+def test_filter_idle_fingerprint_keeps_real_new_tests_and_tracked_scratch_names() -> None:
+    fp = "aaa\n?? tests/web/views-new.test.mjs\n M tmp-notes.txt\n"
+    # The new test file is real progress; the tracked change counts even though its name matches
+    # tmp-*.
+    assert filter_idle_fingerprint(fp, DEFAULT_IDLE_IGNORE) == fp
+
+
+def test_filter_idle_fingerprint_folder_line_matches_on_its_own_name() -> None:
+    # The folder's own name matches tmp-* although the whole path does not start with it.
+    assert filter_idle_fingerprint("aaa\n?? build/tmp-x/\n", ["tmp-*"]) == "aaa\n"
+    # A folder whose own name does not match is kept.
+    assert filter_idle_fingerprint("aaa\n?? build/keep/\n", ["tmp-*"]) == "aaa\n?? build/keep/\n"
+
+
 def test_repo_change_after_a_quiet_stretch_is_logged(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     config, run_dir = _setup(tmp_path, _UNTICKED, max_sessions=5, idle_minutes=90)
     clock = Clock()

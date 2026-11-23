@@ -13,7 +13,10 @@ class ConfigError(ValueError):
 # Scratch files an agent writes while working: they must not reset the supervisor's idle clock, so by
 # default they are dropped from the fingerprint the idle check compares (filter_idle_fingerprint in
 # supervise.py). A run.toml can replace the list; an empty list ignores nothing.
-DEFAULT_IDLE_IGNORE = ["*.lcov", "*.coverage", ".coverage*", ".tmp_*", "*.tmp", "*.log"]
+DEFAULT_IDLE_IGNORE = [
+    "*.lcov", "*.coverage", ".coverage*", ".tmp_*", "*.tmp", "tmp-*", "tmp_*", "*-tmp*",
+    ".covtmp*", "*cov*.txt", "*.log", "*probe*",
+]
 
 
 @dataclass(frozen=True)

@@ -101,7 +101,10 @@ def test_defaults_when_optional_keys_missing(tmp_path: Path) -> None:
     assert cfg.launch_grace_polls == 4
     assert cfg.status_retry_polls == 10
     assert cfg.idle_minutes == 60
-    assert cfg.idle_ignore == ["*.lcov", "*.coverage", ".coverage*", ".tmp_*", "*.tmp", "*.log"]
+    assert cfg.idle_ignore == [
+        "*.lcov", "*.coverage", ".coverage*", ".tmp_*", "*.tmp", "tmp-*", "tmp_*", "*-tmp*",
+        ".covtmp*", "*cov*.txt", "*.log", "*probe*",
+    ]
     assert cfg.item_minutes == 0
     assert cfg.stop == []
     assert cfg.launch_backoff_seconds == 60
