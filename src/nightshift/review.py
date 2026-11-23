@@ -87,24 +87,53 @@ def _numstat(repo: Path, commit_hash: str) -> tuple[int, int]:
     return (added, removed)
 
 
+_JS_TEST_SUFFIXES = (".test.js", ".test.mjs", ".test.cjs", ".test.ts", ".spec.js", ".spec.mjs", ".spec.ts")
+_JS_TEST_STARTS = ("test(", "it(", "test.only(", "it.only(", "test.skip(", "it.skip(")
+
+
 def _test_files(paths: list[str]) -> list[str]:
-    """The changed files that are python test files."""
-    return [path for path in paths if path.endswith(".py") and path.rsplit("/", 1)[-1].startswith("test_")]
+    """The changed files that are test files: python's test_*.py and js/ts .test.* or .spec.* in any folder."""
+    return [path for path in paths if _is_test_file(path)]
 
 
-def _count_test_defs(repo: Path, revision: str, path: str) -> int:
-    """Count the 'def test' lines of one file at one revision; a missing file counts 0."""
+def _is_test_file(path: str) -> bool:
+    """True when the path is a python test file or a javascript/typescript test file."""
+    if path.endswith(".py") and path.rsplit("/", 1)[-1].startswith("test_"):
+        return True
+    return any(path.endswith(suffix) for suffix in _JS_TEST_SUFFIXES)
+
+
+def _count_tests(repo: Path, revision: str, path: str) -> int:
+    """Count the test lines of one file at one revision; a missing file counts 0.
+
+    Python counts 'def test' and 'async def test'; JavaScript and TypeScript count lines whose first token is
+    test(, it( or their .only/.skip forms, template-literal or quoted names alike. It stays a line count with no
+    parser: tests generated in a loop count as one line."""
     result = run_git(repo, "show", f"{revision}:{path}")
     if result.returncode != 0:
         return 0
-    return sum(1 for line in result.stdout.splitlines() if line.lstrip().startswith("def test"))
+    if path.endswith(".py"):
+        return sum(1 for line in result.stdout.splitlines() if _is_python_test_line(line))
+    return sum(1 for line in result.stdout.splitlines() if _is_js_test_line(line))
+
+
+def _is_python_test_line(line: str) -> bool:
+    """True when the line starts a python test function, sync or async."""
+    stripped = line.lstrip()
+    return stripped.startswith("def test") or stripped.startswith("async def test")
+
+
+def _is_js_test_line(line: str) -> bool:
+    """True when the first token of the line is a javascript/typescript test call."""
+    stripped = line.lstrip()
+    return any(stripped.startswith(token) for token in _JS_TEST_STARTS)
 
 
 def _test_counts(repo: Path, commit_hash: str, paths: list[str]) -> dict[str, tuple[int, int]]:
-    """Return per-file 'def test' counts before and after one commit for its changed test files."""
+    """Return per-file test counts before and after one commit for its changed test files."""
     counts: dict[str, tuple[int, int]] = {}
     for path in _test_files(paths):
-        counts[path] = (_count_test_defs(repo, f"{commit_hash}~1", path), _count_test_defs(repo, commit_hash, path))
+        counts[path] = (_count_tests(repo, f"{commit_hash}~1", path), _count_tests(repo, commit_hash, path))
     return counts
 
 

@@ -161,3 +161,93 @@ def test_review_says_no_commit_for_missing_items(tmp_path: Path, capsys: pytest.
         "  tests: 0 -> 0\n"
         "Q2 second item: no commit\n"
     )
+
+
+def test_review_warns_when_javascript_tests_shrink(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    five_tests = (
+        "test('one', () => {})\n"
+        "it('two', () => {})\n"
+        "test.only('three', () => {})\n"
+        "it.skip('four', () => {})\n"
+        "test(`five`, () => {})\n"
+    )
+    three_tests = (
+        "test('one', () => {})\n"
+        "it('two', () => {})\n"
+        "test.only('three', () => {})\n"
+    )
+    repo, run_dir = _run_dir(tmp_path, _ONE_ITEM)
+    _commit(repo, {"tests/app.test.mjs": five_tests}, "root: initial import")
+    _commit(repo, {"tests/app.test.mjs": three_tests}, "Q1: first item")
+    commit_hash = _short_hash(repo, "HEAD")
+
+    code = main(["review", str(run_dir)])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert out == (
+        f"Q1 first item ({commit_hash})\n"
+        "  files: 1 (+0 -2)  tests/app.test.mjs\n"
+        "  tests: 5 -> 3\n"
+        "  ! fewer tests in tests/app.test.mjs (5 -> 3)\n"
+    )
+
+
+def test_review_counts_async_python_tests(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    two_async = "async def test_one():\n    pass\n\n\nasync def test_two():\n    pass\n"
+    one_async = "async def test_one():\n    pass\n"
+    repo, run_dir = _run_dir(tmp_path, _ONE_ITEM)
+    _commit(repo, {"tests/test_app.py": two_async}, "root: initial import")
+    _commit(repo, {"tests/test_app.py": one_async}, "Q1: first item")
+    commit_hash = _short_hash(repo, "HEAD")
+
+    code = main(["review", str(run_dir)])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert out == (
+        f"Q1 first item ({commit_hash})\n"
+        "  files: 1 (+0 -4)  tests/test_app.py\n"
+        "  tests: 2 -> 1\n"
+        "  ! fewer tests in tests/test_app.py (2 -> 1)\n"
+    )
+
+
+def test_review_ignores_non_test_javascript_files(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    five_calls = "test('a')\ntest('b')\ntest('c')\ntest('d')\ntest('e')\n"
+    three_calls = "test('a')\ntest('b')\ntest('c')\n"
+    repo, run_dir = _run_dir(tmp_path, _ONE_ITEM)
+    _commit(repo, {"src/util.mjs": five_calls}, "root: initial import")
+    _commit(repo, {"src/util.mjs": three_calls}, "Q1: first item")
+    commit_hash = _short_hash(repo, "HEAD")
+
+    code = main(["review", str(run_dir)])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert out == (
+        f"Q1 first item ({commit_hash})\n"
+        "  files: 1 (+0 -2)  src/util.mjs\n"
+        "  tests: 0 -> 0\n"
+    )
+
+
+def test_review_counts_loop_generated_tests_once(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    # Documented limit of the line count: one loop body with a test( line counts as one test.
+    loop_body = "for (const name of names) {\n  test(name, () => {})\n}\n"
+    repo, run_dir = _run_dir(tmp_path, _ONE_ITEM)
+    _commit(repo, {"tests/app.test.mjs": loop_body}, "root: initial import")
+    _git(repo, "rm", "-q", "--", "tests/app.test.mjs")
+    _git(repo, "commit", "-q", "-m", "Q1: first item", "-m", "1 passed in 0.1s")
+    commit_hash = _short_hash(repo, "HEAD")
+
+    code = main(["review", str(run_dir)])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert out == (
+        f"Q1 first item ({commit_hash})\n"
+        "  files: 1 (+0 -3)  tests/app.test.mjs\n"
+        "  tests: 1 -> 0\n"
+        "  ! fewer tests in tests/app.test.mjs (1 -> 0)\n"
+    )
