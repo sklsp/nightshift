@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## [0.29.0] - 2026-11-24
+
+- agent: a stop command can name the running session; set agent.session_pattern to a regex with one group and put {session} in a stop argument, e.g. Cline's history delete --session-id {session}; without an id the stop is skipped instead of running with a literal placeholder
+
 ## [0.28.0] - 2026-11-24
 
 - status: --json gains supervisor_running (true while a live supervisor holds the repo lock) and updated (the last event's time, null when there are none), and plain text adds one line saying whether the supervisor is running
