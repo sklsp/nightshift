@@ -227,3 +227,73 @@ def test_doctor_wait_seconds_not_below_timeout_hint(tmp_path: Path, capsys: pyte
     lines = capsys.readouterr().out.splitlines()
     assert code == 1
     assert "problem: timing: lower check.wait_seconds below check.timeout_hint_seconds" in lines
+
+
+def _add_agent_stop(run_dir: Path, printed: str, stop_args: list[str]) -> None:
+    """Add an [agent] section whose status prints one fixed line and stop uses the given args."""
+    exe = Path(sys.executable).as_posix()
+    status_cmd = [exe, "-c", f'print("{printed}")']
+    agent_section = (
+        "timeout_hint_seconds = 30\n"
+        "[agent]\n"
+        f"status = {status_cmd!r}\n"
+        'session_pattern = "sessionId=([^ ]+)"\n'
+        f"stop = {stop_args!r}\n"
+    )
+    _rewrite_toml(run_dir, "timeout_hint_seconds = 30\n", agent_section)
+
+
+def test_doctor_stop_session_ok_line_names_the_session(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    run_dir = _healthy_run(tmp_path)
+    _add_agent_stop(run_dir, "sessionId=abc-123", ["fake-stop", "--session-id", "{session}"])
+
+    code = main(["doctor", str(run_dir)])
+
+    lines = capsys.readouterr().out.splitlines()
+    assert code == 0
+    assert lines == [
+        "ok: run.toml",
+        "ok: items.md",
+        "ok: repo",
+        "ok: test command",
+        "ok: agent status",
+        "ok   stop would end session abc-123",
+        "ok: timing",
+    ]
+
+
+def test_doctor_stop_session_warns_when_nothing_matches(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    run_dir = _healthy_run(tmp_path)
+    _add_agent_stop(run_dir, "no session around", ["fake-stop", "--session-id", "{session}"])
+
+    code = main(["doctor", str(run_dir)])
+
+    lines = capsys.readouterr().out.splitlines()
+    assert code == 0
+    assert lines == [
+        "ok: run.toml",
+        "ok: items.md",
+        "ok: repo",
+        "ok: test command",
+        "ok: agent status",
+        "warn stop: session_pattern matches nothing in the status output",
+        "ok: timing",
+    ]
+
+
+def test_doctor_stop_without_session_prints_no_line(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    run_dir = _healthy_run(tmp_path)
+    _add_agent_stop(run_dir, "sessionId=abc-123", ["fake-stop", "--now"])
+
+    code = main(["doctor", str(run_dir)])
+
+    lines = capsys.readouterr().out.splitlines()
+    assert code == 0
+    assert lines == [
+        "ok: run.toml",
+        "ok: items.md",
+        "ok: repo",
+        "ok: test command",
+        "ok: agent status",
+        "ok: timing",
+    ]

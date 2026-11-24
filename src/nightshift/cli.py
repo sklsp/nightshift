@@ -10,7 +10,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from nightshift import __version__
-from nightshift.agent import AgentError
+from nightshift.agent import AgentError, session_id, status_output
 from nightshift.commits import CommitError, commit_report
 from nightshift.config import ConfigError, RunConfig, load_config
 from nightshift.finish import run_finish
@@ -448,6 +448,15 @@ def _doctor(run_dir: Path) -> int:
             report(check, True)
         else:
             report(check, False, f"install {program} or put it on PATH")
+
+    if config.status and any("{session}" in arg for arg in config.stop):
+        output = status_output(config, quiet=True)
+        raw = session_id(config, output) if output is not None else None
+        session = raw.strip() if raw is not None else None
+        if session:
+            print(f"ok   stop would end session {session}")
+        elif output is not None:
+            print("warn stop: session_pattern matches nothing in the status output")
 
     if config.wait_seconds < config.timeout_hint_seconds:
         report("timing", True)

@@ -39,7 +39,7 @@ def format_exit_code(code: int) -> str:
     return str(code)
 
 
-def _status_output(config: RunConfig, *, quiet: bool = False) -> str | None:
+def status_output(config: RunConfig, *, quiet: bool = False) -> str | None:
     """Run the status command and return its stdout, or None when the check failed."""
     if not config.status:
         raise AgentError("missing required key 'agent.status'")
@@ -65,7 +65,7 @@ def _status_output(config: RunConfig, *, quiet: bool = False) -> str | None:
 
 def is_running(config: RunConfig, *, quiet: bool = False) -> bool | None:
     """Return True when the status output matches, False when it does not, and None when the check failed."""
-    output = _status_output(config, quiet=quiet)
+    output = status_output(config, quiet=quiet)
     if output is None:
         return None
     return re.search(config.running_pattern, output) is not None
@@ -95,7 +95,7 @@ def stop(config: RunConfig) -> None:
         if not config.session_pattern:
             print("stop command uses {session} but agent.session_pattern is not set; skipping stop", file=sys.stderr)
             return
-        output = _status_output(config, quiet=True)
+        output = status_output(config, quiet=True)
         session = session_id(config, output) if output is not None else None
         if session is None:
             print("no session id found in status output; skipping stop", file=sys.stderr)

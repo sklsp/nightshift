@@ -70,6 +70,8 @@ Python 3.11 or newer; no other dependencies. This puts `nightshift` on your PATH
    nightshift doctor myrun
    ```
 
+   When `agent.stop` uses `{session}`, doctor runs the status command once and says which session the stop would end, or warns when the pattern matches nothing.
+
 4. Render the run files:
 
    ```

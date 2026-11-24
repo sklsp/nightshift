@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## [0.31.0] - 2026-11-24
+
+- config: an agent.stop that uses {session} now needs agent.session_pattern set in run.toml; load_config names both keys when one is missing
+- doctor: when agent.stop contains {session}, doctor runs the status command once and prints ok   stop would end session <id> for a matching id, or warns that session_pattern matches nothing (a warning, not a failure)
+
 ## [0.30.0] - 2026-11-24
 
 - status: time on item now comes from this run's commits only (the same range report and review use), so a done-item marker on an older commit outside the range no longer sets the reference; the supervisor-event fallback stays
