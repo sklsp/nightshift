@@ -1,11 +1,12 @@
 """Tests for the agent launch and status adapters."""
 
+import subprocess
 import sys
 from pathlib import Path
 
 import pytest
 
-from nightshift.agent import AgentError, format_exit_code, is_running, launch
+from nightshift.agent import AgentError, format_exit_code, is_running, launch, session_id, stop
 from nightshift.config import RunConfig
 
 
@@ -14,10 +15,12 @@ def _config(
     launch: list[str] | None = None,
     status: list[str] | None = None,
     pattern: str = "running",
+    stop_command: list[str] | None = None,
+    session_pattern: str = "",
 ) -> RunConfig:
     """Build a config whose repo and commands live under tmp_path."""
     repo = tmp_path / "repo"
-    repo.mkdir()
+    repo.mkdir(exist_ok=True)
     return RunConfig(
         name="agent-test",
         repo=repo,
@@ -25,6 +28,8 @@ def _config(
         launch=list(launch or []),
         status=list(status or []),
         running_pattern=pattern,
+        stop=list(stop_command or []),
+        session_pattern=session_pattern,
     )
 
 
@@ -153,3 +158,110 @@ def test_launch_missing_config_raises(tmp_path: Path) -> None:
 def test_status_missing_config_raises(tmp_path: Path) -> None:
     with pytest.raises(AgentError, match=r"agent\.status"):
         is_running(_config(tmp_path))
+
+
+def test_session_id_returns_group_of_first_match(tmp_path: Path) -> None:
+    config = _config(tmp_path, session_pattern=r'"id":"([^"]+)"')
+    output = '{"sessions":[{"id":"abc-123","status":"running"},{"id":"zzz"}]}'
+
+    assert session_id(config, output) == "abc-123"
+
+
+def test_session_id_without_match_is_none(tmp_path: Path) -> None:
+    config = _config(tmp_path, session_pattern=r'"id":"([^"]+)"')
+
+    assert session_id(config, "agent status: idle") is None
+
+
+def test_session_id_on_empty_output_is_none(tmp_path: Path) -> None:
+    config = _config(tmp_path, session_pattern=r'"id":"([^"]+)"')
+
+    assert session_id(config, "") is None
+
+
+def test_session_id_without_pattern_is_none(tmp_path: Path) -> None:
+    config = _config(tmp_path)
+
+    assert session_id(config, '{"id":"abc-123"}') is None
+
+
+def test_stop_fills_session_placeholder(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[list[str]] = []
+
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls.append(list(command))
+        stdout = '{"id":"abc-123","status":"running"}' if list(command) == ["fake-status"] else ""
+        return subprocess.CompletedProcess(args=command, returncode=0, stdout=stdout)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    config = _config(
+        tmp_path,
+        status=["fake-status"],
+        stop_command=["fake-stop", "--session-id", "{session}"],
+        session_pattern=r'"id":"([^"]+)"',
+    )
+
+    stop(config)
+
+    assert calls == [["fake-status"], ["fake-stop", "--session-id", "abc-123"]]
+
+
+def test_stop_skips_when_no_session_id_found(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    calls: list[list[str]] = []
+
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls.append(list(command))
+        stdout = "agent status: idle" if list(command) == ["fake-status"] else ""
+        return subprocess.CompletedProcess(args=command, returncode=0, stdout=stdout)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    config = _config(
+        tmp_path,
+        status=["fake-status"],
+        stop_command=["fake-stop", "--session-id", "{session}"],
+        session_pattern=r'"id":"([^"]+)"',
+    )
+
+    stop(config)
+
+    # The status command ran once more but the stop never did: no literal {session} reaches a process.
+    assert calls == [["fake-status"]]
+    err = capsys.readouterr().err
+    assert "skipping stop" in err
+
+
+def test_stop_with_placeholder_but_no_pattern_skips(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    calls: list[list[str]] = []
+
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls.append(list(command))
+        return subprocess.CompletedProcess(args=command, returncode=0)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    config = _config(tmp_path, stop_command=["fake-stop", "--session-id", "{session}"])
+
+    stop(config)
+
+    assert calls == []
+    err = capsys.readouterr().err
+    assert "skipping stop" in err
+
+
+def test_stop_without_placeholder_runs_unchanged(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[list[str]] = []
+
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls.append(list(command))
+        return subprocess.CompletedProcess(args=command, returncode=0)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    config = _config(tmp_path, status=["fake-status"], stop_command=["fake-stop", "--now"])
+
+    stop(config)
+
+    # No {session} in the command: it runs as before and no extra status check happens.
+    assert calls == [["fake-stop", "--now"]]

@@ -40,6 +40,7 @@ class RunConfig:
     launch: list[str] = field(default_factory=list)
     status: list[str] = field(default_factory=list)
     running_pattern: str = "running"
+    session_pattern: str = ""
     poll_seconds: int = 30
     max_sessions: int = 20
     launch_grace_polls: int = 4
@@ -61,6 +62,7 @@ _AGENT_KEYS = {
     "launch",
     "status",
     "running_pattern",
+    "session_pattern",
     "poll_seconds",
     "max_sessions",
     "launch_grace_polls",
@@ -125,6 +127,14 @@ def load_config(run_dir: Path) -> RunConfig:
     launch = _str_list(agent, "agent", "launch", [])
     status = _str_list(agent, "agent", "status", [])
     running_pattern = _str(agent, "agent", "running_pattern", "running")
+    session_pattern = _str(agent, "agent", "session_pattern", "")
+    if session_pattern:
+        try:
+            compiled = re.compile(session_pattern)
+        except re.error as exc:
+            raise ConfigError(f"invalid value for 'agent.session_pattern': {exc}") from exc
+        if compiled.groups != 1:
+            raise ConfigError("invalid value for 'agent.session_pattern': exactly one capture group is required")
     poll_seconds = _int(agent, "agent", "poll_seconds", 30)
     max_sessions = _int(agent, "agent", "max_sessions", 20)
     launch_grace_polls = _int(agent, "agent", "launch_grace_polls", 4)
@@ -163,6 +173,7 @@ def load_config(run_dir: Path) -> RunConfig:
         launch=launch,
         status=status,
         running_pattern=running_pattern,
+        session_pattern=session_pattern,
         poll_seconds=poll_seconds,
         max_sessions=max_sessions,
         launch_grace_polls=launch_grace_polls,

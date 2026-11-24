@@ -204,6 +204,7 @@ myrun/                  the run directory, outside the repo
 | `agent.launch_ok_codes` | `[0]` | launch exit codes that do not get a log line; any other code is logged |
 | `agent.status` | `[]` | command whose output the supervisor polls for a live agent |
 | `agent.running_pattern` | `"running"` | substring in status output meaning the agent is alive |
+| `agent.session_pattern` | `""` | regex applied to status output; group 1 of the first match fills `{session}` in `agent.stop`; empty means no substitution |
 | `agent.poll_seconds` | `30` | how often the supervisor checks the agent and progress |
 | `agent.max_sessions` | `20` | sessions allowed before the supervisor gives up |
 | `agent.launch_grace_polls` | `4` | status polls to wait for a launched agent to report running; if it never does, the supervisor backs off and relaunches without counting the session as empty |

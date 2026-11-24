@@ -275,6 +275,50 @@ def test_command_prefix_quotes_part_with_space() -> None:
     assert command_prefix(config) == '"C:/Program Files/nightshift/python.exe" -m nightshift'
 
 
+def test_session_pattern_default_is_empty(tmp_path: Path) -> None:
+    _write(tmp_path, MINIMAL)
+
+    cfg = load_config(tmp_path)
+
+    assert cfg.session_pattern == ""
+
+
+def test_session_pattern_with_one_group_is_accepted(tmp_path: Path) -> None:
+    _write(tmp_path, MINIMAL + '\n[agent]\nsession_pattern = \'"id":"([^"]+)"\'\n')
+
+    cfg = load_config(tmp_path)
+
+    assert cfg.session_pattern == '"id":"([^"]+)"'
+
+
+def test_session_pattern_that_does_not_compile_is_rejected(tmp_path: Path) -> None:
+    _write(tmp_path, MINIMAL + '\n[agent]\nsession_pattern = "([a"\n')
+
+    with pytest.raises(ConfigError, match=r"invalid value for 'agent\.session_pattern'"):
+        load_config(tmp_path)
+
+
+def test_session_pattern_without_group_is_rejected(tmp_path: Path) -> None:
+    _write(tmp_path, MINIMAL + '\n[agent]\nsession_pattern = "running"\n')
+
+    with pytest.raises(ConfigError, match=r"invalid value for 'agent\.session_pattern'"):
+        load_config(tmp_path)
+
+
+def test_session_pattern_with_two_groups_is_rejected(tmp_path: Path) -> None:
+    _write(tmp_path, MINIMAL + '\n[agent]\nsession_pattern = "(a)(b)"\n')
+
+    with pytest.raises(ConfigError, match=r"invalid value for 'agent\.session_pattern'"):
+        load_config(tmp_path)
+
+
+def test_session_pattern_not_a_string_is_rejected(tmp_path: Path) -> None:
+    _write(tmp_path, MINIMAL + "\n[agent]\nsession_pattern = 5\n")
+
+    with pytest.raises(ConfigError, match=r"wrong type for 'agent\.session_pattern'"):
+        load_config(tmp_path)
+
+
 def test_status_retry_polls_zero_is_rejected(tmp_path: Path) -> None:
     _write(tmp_path, MINIMAL + "\n[agent]\nstatus_retry_polls = 0\n")
     with pytest.raises(ConfigError, match=r"invalid value for 'agent\.status_retry_polls'"):
