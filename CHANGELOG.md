@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## [0.30.0] - 2026-11-24
+
+- status: time on item now comes from this run's commits only (the same range report and review use), so a done-item marker on an older commit outside the range no longer sets the reference; the supervisor-event fallback stays
+- review: after the per-item blocks, one warning line per commit in the run's range whose subject starts with neither <prefix><number>: nor chore:, e.g. warning: 5dc859a "L2: ..." does not start with the run prefix Q
+
 ## [0.29.0] - 2026-11-24
 
 - agent: a stop command can name the running session; set agent.session_pattern to a regex with one group and put {session} in a stop argument, e.g. Cline's history delete --session-id {session}; without an id the stop is skipped instead of running with a literal placeholder

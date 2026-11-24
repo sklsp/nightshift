@@ -163,6 +163,47 @@ def test_review_says_no_commit_for_missing_items(tmp_path: Path, capsys: pytest.
     )
 
 
+def test_review_warns_on_commits_without_run_prefix(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    repo, run_dir = _run_dir(tmp_path, _ONE_ITEM)
+    _commit(repo, {"src/app.py": "x = 1\n"}, "root: initial import")
+    _commit(repo, {"src/app.py": "x = 2\n"}, "Q1: first item")
+    q1_hash = _short_hash(repo, "HEAD")
+    _commit(repo, {"src/app.py": "x = 3\n"}, "L2: stray work")
+    l2_hash = _short_hash(repo, "HEAD")
+    _commit(repo, {"src/app.py": "x = 4\n"}, "M3: more stray")
+    m3_hash = _short_hash(repo, "HEAD")
+
+    code = main(["review", str(run_dir)])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert out == (
+        f"Q1 first item ({q1_hash})\n"
+        "  files: 1 (+1 -1)  src/app.py\n"
+        "  tests: 0 -> 0\n"
+        f'warning: {m3_hash} "M3: more stray" does not start with the run prefix Q\n'
+        f'warning: {l2_hash} "L2: stray work" does not start with the run prefix Q\n'
+    )
+
+
+def test_review_allows_chore_commits(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    repo, run_dir = _run_dir(tmp_path, _ONE_ITEM)
+    _commit(repo, {"src/app.py": "x = 1\n"}, "root: initial import")
+    _commit(repo, {"src/app.py": "x = 2\n"}, "Q1: first item")
+    q1_hash = _short_hash(repo, "HEAD")
+    _commit(repo, {"src/app.py": "x = 3\n"}, "chore: tidy up")
+
+    code = main(["review", str(run_dir)])
+
+    out = capsys.readouterr().out
+    assert code == 0
+    assert out == (
+        f"Q1 first item ({q1_hash})\n"
+        "  files: 1 (+1 -1)  src/app.py\n"
+        "  tests: 0 -> 0\n"
+    )
+
+
 def test_review_warns_when_javascript_tests_shrink(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     five_tests = (
         "test('one', () => {})\n"

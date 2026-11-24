@@ -17,7 +17,11 @@ def build_review(run_dir: Path) -> str:
 
 
 def review_lines(config: RunConfig, items: list[Item]) -> list[str]:
-    """Return the review lines of one run in item order; warnings follow their block."""
+    """Return the review lines of one run in item order; warnings follow their block.
+
+    After the per-item blocks, one warning line per commit whose subject starts with neither the run prefix
+    (<prefix><number>:) nor chore:.
+    """
     base = resolve_base(config)
     commits = commit_log(config.repo, base=base, tip=_tip(config)) if base is not None else []
     by_number: dict[int, str] = {}
@@ -34,6 +38,9 @@ def review_lines(config: RunConfig, items: list[Item]) -> list[str]:
             lines.append(f"{marker} {item.title}: no commit")
         else:
             lines.extend(_block(config, item, commit_hash))
+    for found_hash, _, subject in commits:
+        if pattern.match(subject) is None and not subject.startswith("chore:"):
+            lines.append(f'warning: {found_hash} "{subject}" does not start with the run prefix {config.prefix}')
     return lines
 
 
