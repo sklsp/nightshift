@@ -634,6 +634,10 @@ def _status(run_dir: Path, as_json: bool = False) -> int:
         print(f"on {config.prefix}{progress.next_item} for {format_minutes(seconds)}")
 
     print(last_gate_line(run_dir))
+    if supervisor_lock_held(config.repo):
+        print("supervisor: running")
+    else:
+        print("supervisor: not running")
     _print_commits(config.repo)
     _print_supervisor_events(run_dir)
     return 0
@@ -667,6 +671,7 @@ def _status_payload(run_dir: Path, config: RunConfig, progress: Progress, progre
     else:
         next_title = _next_title(progress_path, config.prefix, next_item)
     seconds = current_item_seconds(run_dir, config, progress)
+    events = read_supervisor_events(run_dir)
     return {
         "name": config.name,
         "total": progress.total,
@@ -678,7 +683,10 @@ def _status_payload(run_dir: Path, config: RunConfig, progress: Progress, progre
         "current_minutes": None if seconds is None else (seconds + 30) // 60,
         "gate": state(run_dir),
         "commits": _commit_dicts(config.repo) or [],
-        "events": read_supervisor_events(run_dir)[-5:],
+        "events": events[-5:],
+        # true when a live supervisor holds the repo lock; updated is the last event's time, null when there are none
+        "supervisor_running": supervisor_lock_held(config.repo),
+        "updated": None if not events else events[-1]["t"],
     }
 
 

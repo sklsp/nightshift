@@ -122,6 +122,8 @@ def test_status_json_with_progress(tmp_path: Path, capsys: pytest.CaptureFixture
         "gate",
         "commits",
         "events",
+        "supervisor_running",
+        "updated",
     }
     assert payload["name"] == "st"
     assert payload["total"] == 3
@@ -136,6 +138,9 @@ def test_status_json_with_progress(tmp_path: Path, capsys: pytest.CaptureFixture
     assert len(commits[0]["hash"]) > 0
     assert payload["events"] == []
     assert payload["current_minutes"] is None
+    # no lock file and no event lines: the supervisor is not running and nothing was updated
+    assert payload["supervisor_running"] is False
+    assert payload["updated"] is None
 
 
 def test_status_json_fresh_run(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -156,6 +161,8 @@ def test_status_json_fresh_run(tmp_path: Path, capsys: pytest.CaptureFixture[str
         "gate",
         "commits",
         "events",
+        "supervisor_running",
+        "updated",
     }
     assert payload["name"] == "st"
     assert payload["total"] == 0
@@ -167,6 +174,9 @@ def test_status_json_fresh_run(tmp_path: Path, capsys: pytest.CaptureFixture[str
     assert payload["commits"] == []
     assert payload["current_minutes"] is None
     assert payload["events"] == []
+    # no lock file and no event lines: the supervisor is not running and nothing was updated
+    assert payload["supervisor_running"] is False
+    assert payload["updated"] is None
 
 
 def test_version_flag_prints_version_and_exits_zero(capsys: pytest.CaptureFixture[str]) -> None:
@@ -536,6 +546,66 @@ def test_status_json_includes_last_five_supervisor_events(tmp_path: Path, capsys
         {"t": "2026-11-15T23:05:00", "msg": "event 6"},
         {"t": "2026-11-15T23:06:00", "msg": "event 7"},
     ]
+    # no lock file but events exist: not running, updated is the last event's time
+    assert payload["supervisor_running"] is False
+    assert payload["updated"] == "2026-11-15T23:06:00"
+
+
+def _write_live_lock(repo: Path, run_dir: Path) -> None:
+    """Write a supervisor lock carrying our own pid so it counts as live."""
+    (repo / ".git" / "nightshift-supervise.lock").write_text(
+        json.dumps({"pid": os.getpid(), "run": str(run_dir)}), encoding="utf-8"
+    )
+
+
+def test_status_json_reports_supervisor_running_and_updated(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    if shutil.which("git") is None:
+        pytest.skip("git not on PATH")
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q")
+    run_dir = _make_run(tmp_path, repo)
+    _write_live_lock(repo, run_dir)
+    _write_events(run_dir, _seven_event_lines())
+
+    assert main(["status", str(run_dir), "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["supervisor_running"] is True
+    # updated is the time of the last event line, not the first
+    assert payload["updated"] == "2026-11-15T23:06:00"
+
+
+def test_status_json_reports_supervisor_not_running_and_updated_null(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    run_dir = _make_run(tmp_path, repo)
+
+    assert main(["status", str(run_dir), "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["supervisor_running"] is False
+    assert payload["updated"] is None
+
+
+def test_status_text_reports_supervisor_state(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    if shutil.which("git") is None:
+        pytest.skip("git not on PATH")
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init", "-q")
+    run_dir = _make_run(tmp_path, repo)
+
+    assert main(["status", str(run_dir)]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert "supervisor: not running" in lines
+
+    _write_live_lock(repo, run_dir)
+    assert main(["status", str(run_dir)]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert "supervisor: running" in lines
 
 
 def test_status_without_events_prints_nothing_extra(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
