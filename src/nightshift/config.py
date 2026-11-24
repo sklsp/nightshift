@@ -147,6 +147,8 @@ def load_config(run_dir: Path) -> RunConfig:
     if item_minutes < 0:
         raise ConfigError("invalid value for 'agent.item_minutes': must be at least 0")
     stop = _str_list(agent, "agent", "stop", [])
+    if any("{session}" in arg for arg in stop) and not session_pattern:
+        raise ConfigError("'agent.stop' uses {session} but 'agent.session_pattern' is not set")
     launch_backoff_seconds = _int(agent, "agent", "launch_backoff_seconds", 60)
     max_launch_failures = _int(agent, "agent", "max_launch_failures", 6)
     if launch_backoff_seconds < 1:

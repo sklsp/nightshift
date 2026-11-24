@@ -319,6 +319,39 @@ def test_session_pattern_not_a_string_is_rejected(tmp_path: Path) -> None:
         load_config(tmp_path)
 
 
+def test_stop_with_session_placeholder_but_no_pattern_is_rejected(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        MINIMAL + '\n[agent]\nstop = ["lms", "history", "delete", "--session-id", "{session}"]\n',
+    )
+
+    with pytest.raises(ConfigError, match=r"'agent\.stop' uses \{session\} but 'agent\.session_pattern' is not set"):
+        load_config(tmp_path)
+
+
+def test_stop_with_session_placeholder_and_pattern_loads(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        MINIMAL
+        + '\n[agent]\nsession_pattern = \'"id":"([^"]+)"\'\n'
+        + 'stop = ["lms", "history", "delete", "--session-id", "{session}"]\n',
+    )
+
+    cfg = load_config(tmp_path)
+
+    assert cfg.stop == ["lms", "history", "delete", "--session-id", "{session}"]
+    assert cfg.session_pattern == '"id":"([^"]+)"'
+
+
+def test_stop_without_session_placeholder_and_no_pattern_loads(tmp_path: Path) -> None:
+    _write(tmp_path, MINIMAL + '\n[agent]\nstop = ["lms", "server", "stop"]\n')
+
+    cfg = load_config(tmp_path)
+
+    assert cfg.stop == ["lms", "server", "stop"]
+    assert cfg.session_pattern == ""
+
+
 def test_status_retry_polls_zero_is_rejected(tmp_path: Path) -> None:
     _write(tmp_path, MINIMAL + "\n[agent]\nstatus_retry_polls = 0\n")
     with pytest.raises(ConfigError, match=r"invalid value for 'agent\.status_retry_polls'"):
