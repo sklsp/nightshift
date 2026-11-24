@@ -59,6 +59,45 @@ def test_current_item_seconds_since_newest_matching_commit(tmp_path: Path) -> No
     assert current_item_seconds(run_dir, config, progress, now=lambda: now) == 2400
 
 
+def test_current_item_seconds_ignores_marker_outside_run_range(tmp_path: Path) -> None:
+    if shutil.which("git") is None:
+        pytest.skip("git not on PATH")
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "a.txt").write_text("one", encoding="utf-8")
+    _git(repo, "init")
+    _git(repo, "add", ".")
+    old_date = {"GIT_AUTHOR_DATE": "2026-11-15T23:00:00", "GIT_COMMITTER_DATE": "2026-11-15T23:00:00"}
+    _git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-m", "T1: first item", env=old_date)
+    # the run's range starts after this commit; it matches the T1 marker but is outside the range
+    _git(repo, "branch", "base")
+    (repo / "b.txt").write_text("two", encoding="utf-8")
+    new_date = {"GIT_AUTHOR_DATE": "2026-11-15T23:20:00", "GIT_COMMITTER_DATE": "2026-11-15T23:20:00"}
+    _git(repo, "add", ".")
+    _git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-m", "other work", env=new_date)
+
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    (run_dir / "run.toml").write_text(
+        f'[run]\nname = "st"\nrepo = "{repo.as_posix()}"\nprefix = "T"\nbase = "base"\n[check]\ntest = ["pytest"]\n',
+        encoding="utf-8",
+    )
+    (repo / "PROGRESS-st.md").write_text(
+        "- [x] T1. first item\n- [ ] T2. second item\n", encoding="utf-8"
+    )
+    gate_dir = run_dir / ".gate"
+    gate_dir.mkdir()
+    event = {"t": "2026-11-15T23:30:00", "msg": "session 1 ended: 1/2 done, 0 blocked"}
+    (gate_dir / "supervise.jsonl").write_text(json.dumps(event) + "\n", encoding="utf-8")
+
+    config = load_config(run_dir)
+    progress = read_progress(repo / "PROGRESS-st.md", config.prefix)
+    now = datetime(2026, 11, 15, 23, 38).timestamp()
+    # the T1 commit is outside the run's range, so the reference is the first supervisor event (23:30), not 23:00
+    assert current_item_seconds(run_dir, config, progress, now=lambda: now) == 480
+
+
 def test_current_item_seconds_uses_first_event_when_no_commits(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()

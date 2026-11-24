@@ -1,0 +1,2 @@
+- [x] Q1. status: time on item from this run's commits only (384 passed in 60.55s (0:01:00))
+- [ ] Q2. review: commits without the run prefix, and release 0.30.0
