@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+## [0.28.0] - 2026-11-24
+
+- status: --json gains supervisor_running (true while a live supervisor holds the repo lock) and updated (the last event's time, null when there are none), and plain text adds one line saying whether the supervisor is running
 - tests: the docs stay true about configuration; every key config.py accepts appears in README.md's config reference, and any run/check/agent key used in a fenced toml block of README.md or docs is one config.py accepts
 
 ## [0.27.0] - 2026-11-23
